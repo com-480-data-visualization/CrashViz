@@ -2,7 +2,7 @@
 
 | Student's name | SCIPER |
 | -------------- | ------ |
-| | |
+| Valentin Dupraz | 315995 |
 | | |
 | | |
 
