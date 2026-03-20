@@ -12,8 +12,9 @@
 
 **10% of the final grade**
 
-You can find our report for Milestone 1 [here](Milestone_1.pdf)
-The associated notebook is [here](dataset_download_eda.ipynb)
+You can find our report for Milestone 1 [here](Milestone_1.pdf).
+
+The associated notebook is [here](dataset_download_eda.ipynb).
 
 ## Milestone 2 (17th April, 5pm)
 
