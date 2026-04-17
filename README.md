@@ -20,6 +20,10 @@ The associated notebook is [here](Milestone1/dataset_download_eda.ipynb).
 
 **10% of the final grade**
 
+You can find our report for Milestone 2 [here](Milestone2/Milestone_2.pdf).
+
+The associated htlm is [here](Milestone2/index.htlm).
+
 
 ## Milestone 3 (29th May, 5pm)
 
