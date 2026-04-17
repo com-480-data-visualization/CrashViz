@@ -22,7 +22,7 @@ The associated notebook is [here](Milestone1/dataset_download_eda.ipynb).
 
 You can find our report for Milestone 2 [here](Milestone2/Milestone_2.pdf).
 
-The associated htlm is [here](Milestone2/index.htlm).
+The associated htlm is [here](Milestone2/index.html).
 
 
 ## Milestone 3 (29th May, 5pm)
