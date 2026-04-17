@@ -24,7 +24,7 @@ You can find our report for Milestone 2 [here](Milestone2/Milestone_2.pdf).
 
 The associated htlm is [here](Milestone2/index.html).
 
-To view the live website skeleton directly in your browser, click [here](https://htmlpreview.github.io/?https://github.com/com-480-data-visualization/CrashViz/blob/master/Milestone2/index.html).
+To view the live website skeleton directly in your browser, click [here](https://com-480-data-visualization.github.io/CrashViz/Milestone2/index.html).
 
 
 ## Milestone 3 (29th May, 5pm)
