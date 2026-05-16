@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASSET GLOBE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  * { margin:0;padding:0;box-sizing:border-box; }
+  :root {
+    --bg:#000;--border:rgba(255,255,255,.08);--dim:rgba(255,255,255,.25);
+    --mid:rgba(255,255,255,.55);--hi:rgba(255,255,255,.9);
+    --mono:'Courier New','Lucida Console',monospace;
+    --green:#39ff14;--blue:#00bfff;--orange:#ffa500;
+  }
+  html,body { width:100%;height:100%;background:var(--bg);color:var(--hi);font-family:var(--mono);font-size:11px;overflow:hidden;letter-spacing:.03em; }
+  #root { width:100%;height:100%;display:flex;flex-direction:column; }
+
+  #tabs { flex-shrink:0;height:34px;border-bottom:.5px solid var(--border);display:flex;align-items:stretch;overflow-x:auto;scrollbar-width:none; }
+  #tabs::-webkit-scrollbar { display:none; }
+  .tab { flex-shrink:0;padding:0 14px;display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.12em;color:var(--dim);border-right:.5px solid var(--border);cursor:pointer;transition:color .2s,background .2s;user-select:none;white-space:nowrap; }
+  .tab:hover { color:var(--mid);background:rgba(255,255,255,.02); }
+  .tab.active { color:var(--hi);background:rgba(255,255,255,.04); }
+  .tab-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
+
+  #body { flex:1;display:flex;overflow:hidden; }
+
+  #globe-wrap { flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden; }
+  #globe-wrap::before { content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(57,255,20,.03) 0%,transparent 65%);pointer-events:none;z-index:0; }
+  #globe-wrap::after { content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px);pointer-events:none;z-index:2; }
+  #globe-svg { position:relative;z-index:1;cursor:grab; }
+  #globe-svg:active { cursor:grabbing; }
+  #globe-hint { position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-size:8px;color:var(--dim);letter-spacing:.12em;z-index:10;animation:blink 3s ease-in-out infinite;white-space:nowrap;pointer-events:none; }
+
+  #fallback { flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px; }
+  #fallback.show { display:flex; }
+  #fallback-icon { font-size:48px;opacity:.12;line-height:1; }
+  #fallback-title { font-size:11px;letter-spacing:.15em;color:var(--mid);text-align:center; }
+  #fallback-body { font-size:9px;color:var(--dim);letter-spacing:.06em;text-align:center;max-width:340px;line-height:1.9; }
+
+  #side-panel { flex-shrink:0;width:210px;border-left:.5px solid var(--border);display:flex;flex-direction:column;overflow:hidden; }
+  .sp-section { padding:12px;border-bottom:.5px solid var(--border); }
+  .sp-label { font-size:8px;letter-spacing:.15em;color:var(--dim);margin-bottom:8px; }
+  #asset-name { font-size:13px;font-weight:bold;letter-spacing:.1em;color:var(--hi);margin-bottom:2px; }
+  #asset-ticker { font-size:8px;color:var(--dim);letter-spacing:.12em; }
+
+  #toggle-row { display:flex;gap:6px; }
+  .toggle-btn { flex:1;padding:5px 0;font-size:8px;letter-spacing:.1em;text-align:center;border:.5px solid var(--border);cursor:pointer;color:var(--dim);transition:all .2s;user-select:none; }
+  .toggle-btn:hover { color:var(--mid); }
+  .toggle-btn.act-prod { border-color:rgba(57,255,20,.5);color:var(--green);background:rgba(57,255,20,.05); }
+  .toggle-btn.act-cons { border-color:rgba(0,191,255,.5);color:var(--blue);background:rgba(0,191,255,.05); }
+
+
+  #rank-list { flex:1;overflow-y:auto;padding:12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent; }
+  .rank-header { font-size:8px;letter-spacing:.15em;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between; }
+  .rank-spacer { height:10px; }
+  .rank-item { display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:.5px solid rgba(255,255,255,.03);cursor:pointer;transition:background .15s,border-left .15s; border-left:2px solid transparent; }
+  .rank-item:hover { background:rgba(255,255,255,.02); }
+  .rank-item.selected { background:rgba(255,255,255,.04); border-left-color:currentColor; }
+  .rank-item.selected .rank-name { color:var(--hi); }
+  .rank-item.selected .rank-pct  { color:var(--mid); }
+  .rank-num { font-size:9px;color:var(--dim);width:14px;flex-shrink:0;text-align:right; }
+  .rank-bar-wrap { flex:1;height:3px;background:rgba(255,255,255,.05);position:relative; }
+  .rank-bar { position:absolute;left:0;top:0;height:100%;transition:width .4s ease; }
+  .rank-name { font-size:9px;color:var(--mid);width:70px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .2s; }
+  .rank-pct { font-size:8px;color:var(--dim);width:28px;text-align:right;flex-shrink:0;transition:color .2s; }
+
+
+
+
+
+  #source-strip { flex-shrink:0;padding:6px 12px;border-top:.5px solid var(--border);font-size:7px;color:var(--dim);line-height:1.7;letter-spacing:.05em; }
+  #source-strip span { color:rgba(255,255,255,.35); }
+
+  #tooltip { position:fixed;pointer-events:none;background:rgba(0,0,0,.92);border:.5px solid rgba(255,255,255,.12);padding:8px 10px;font-size:9px;letter-spacing:.08em;color:var(--hi);z-index:1000;opacity:0;transition:opacity .15s;white-space:nowrap; }
+  #tooltip.visible { opacity:1; }
+  .tt-role { color:var(--dim);font-size:8px;margin-bottom:3px; }
+  .tt-name { font-size:10px;font-weight:bold;margin-bottom:4px; }
+  .tt-stat { color:var(--mid); }
+
+  .land { fill:rgba(255,255,255,.12);stroke:rgba(255,255,255,.2);stroke-width:.3; }
+  .graticule { fill:none;stroke:rgba(255,255,255,.07);stroke-width:.3; }
+  .sphere { fill:rgba(5,18,38,.95); }
+  .borders { fill:none;stroke:rgba(255,255,255,.1);stroke-width:.5; }
+  .country-dot { cursor:pointer; }
+
+  @keyframes blink { 0%,100%{opacity:.5}50%{opacity:.15} }
+
+  /* ── Back button + fade overlay ── */
+  #back-btn {
+    position:fixed; top:8px; left:8px; z-index:1500;
+    padding:6px 14px; font-family:var(--mono); font-size:10px;
+    letter-spacing:.18em; color:var(--hi);
+    background:rgba(0,0,0,0.7); border:0.5px solid rgba(255,255,255,0.15);
+    cursor:pointer; transition:background 0.25s,border-color 0.25s,color 0.25s;
+  }
+  #back-btn:hover {
+    background:rgba(57,255,20,0.1); border-color:rgba(57,255,20,0.5); color:var(--green);
+  }
+  #fade-overlay {
+    position:fixed; inset:0; z-index:2000;
+    background:#000; opacity:1; pointer-events:none;
+    transition:opacity 0.7s ease;
+  }
+  #fade-overlay.gone   { opacity:0; }
+  #fade-overlay.active { opacity:1; pointer-events:all; }
+</style>
+</head>
+<body>
+<button id="back-btn" onclick="leaveToIndex()">&lt; BACK TO GRAPH</button>
+<div id="fade-overlay"></div>
+
+<div id="root">
+  <div id="tabs"></div>
+  <div id="body">
+
+    <div id="globe-wrap">
+      <svg id="globe-svg"></svg>
+      <div id="globe-hint">⟳ DRAG TO ROTATE · SCROLL TO ZOOM</div>
+    </div>
+
+    <div id="fallback">
+      <div id="fallback-icon">◈</div>
+      <div id="fallback-title"></div>
+      <div id="fallback-body"></div>
+    </div>
+
+    <div id="side-panel">
+      <div class="sp-section">
+        <div id="asset-name"></div>
+        <div id="asset-ticker"></div>
+      </div>
+      <div class="sp-section" id="toggle-section">
+        <div class="sp-label">// VIEW MODE</div>
+        <div id="toggle-row">
+          <div class="toggle-btn act-prod" data-mode="producers">PRODUCERS</div>
+          <div class="toggle-btn" data-mode="consumers">CONSUMERS</div>
+        </div>
+      </div>
+      <div id="rank-list"></div>
+
+      <div id="source-strip">
+        <span>SOURCE</span> IEA 2023 · USGS 2024 · FAO/USDA 2023–24 · Silver Institute 2024<br>
+        <span>NOTE</span> SHARES REFLECT CURRENT DISTRIBUTION ONLY. HISTORICAL COUNTRY-LEVEL BREAKDOWNS ARE NOT PUBLICLY AVAILABLE AT DAILY RESOLUTION.
+      </div>
+    </div>
+
+  </div>
+</div>
+<div id="tooltip">
+  <div class="tt-role" id="tt-role"></div>
+  <div class="tt-name" id="tt-name"></div>
+  <div class="tt-stat" id="tt-stat"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  DATA
+//  Crude Oil producers/consumers : IEA World Energy Outlook 2023
+//  Gold producers                : USGS Mineral Commodity Summaries 2024
+//  Gold consumers                : World Gold Council Demand Trends 2023
+//  Copper producers/consumers    : USGS 2024, ICSG 2023
+//  Silver producers/consumers    : The Silver Institute World Silver Survey 2024
+//  Corn, Wheat                   : USDA Production, Supply & Distribution, Oct 2024
+// ─────────────────────────────────────────────────────────────────────────────
+const ASSETS = [
+  {
+    id:'crude_oil', label:'CRUDE OIL', ticker:'CL=F · NYMEX', color:'#BA7517', hasGlobe:true,
+    producers:[
+      {country:'USA',          lat:38,   lng:-97,  pct:20.0, rank:1},
+      {country:'Russia',       lat:60,   lng:100,  pct:13.1, rank:2},
+      {country:'Saudi Arabia', lat:24,   lng:45,   pct:12.5, rank:3},
+      {country:'Iraq',         lat:33,   lng:44,   pct: 5.6, rank:4},
+      {country:'Canada',       lat:60,   lng:-95,  pct: 5.4, rank:5},
+      {country:'UAE',          lat:24,   lng:54,   pct: 4.5, rank:6},
+      {country:'Iran',         lat:32,   lng:53,   pct: 4.2, rank:7},
+      {country:'China',        lat:35,   lng:105,  pct: 4.0, rank:8},
+      {country:'Kuwait',       lat:29,   lng:48,   pct: 3.1, rank:9},
+      {country:'Brazil',       lat:-15,  lng:-51,  pct: 2.8, rank:10},
+    ],
+    consumers:[
+      {country:'USA',          lat:38,   lng:-97,  pct:20.1, rank:1},
+      {country:'China',        lat:35,   lng:105,  pct:15.8, rank:2},
+      {country:'India',        lat:21,   lng:78,   pct: 5.4, rank:3},
+      {country:'Russia',       lat:60,   lng:100,  pct: 3.5, rank:4},
+      {country:'Japan',        lat:36,   lng:138,  pct: 3.4, rank:5},
+      {country:'Saudi Arabia', lat:24,   lng:45,   pct: 3.2, rank:6},
+      {country:'Brazil',       lat:-15,  lng:-51,  pct: 3.1, rank:7},
+      {country:'South Korea',  lat:37,   lng:128,  pct: 2.7, rank:8},
+      {country:'Canada',       lat:60,   lng:-95,  pct: 2.5, rank:9},
+      {country:'Germany',      lat:51,   lng:10,   pct: 2.2, rank:10},
+    ]
+  },
+  {
+    id:'usd_index', label:'USD INDEX', ticker:'DX-Y.NYB · ICE', color:'#378ADD', hasGlobe:false,
+    fallback:{
+      title:'FINANCIAL INDEX — NO GEOGRAPHIC VIEW',
+      body:'The US Dollar Index is a weighted basket of 6 currencies (EUR 57.6 %, JPY 13.6 %, GBP 11.9 %, CAD 9.1 %, SEK 4.2 %, CHF 3.6 %). It has no physical supply or demand chain and no meaningful geographic producer / consumer distribution.'
+    }
+  },
+  {
+    id:'gold', label:'GOLD', ticker:'GC=F · COMEX', color:'#EF9F27', hasGlobe:true,
+    producers:[
+      {country:'China',        lat:35,   lng:105,  pct:11.2, rank:1},
+      {country:'Australia',    lat:-25,  lng:134,  pct: 9.8, rank:2},
+      {country:'Russia',       lat:60,   lng:100,  pct: 9.4, rank:3},
+      {country:'Canada',       lat:60,   lng:-95,  pct: 5.1, rank:4},
+      {country:'USA',          lat:38,   lng:-97,  pct: 5.0, rank:5},
+      {country:'Ghana',        lat:8,    lng:-1,   pct: 3.9, rank:6},
+      {country:'Kazakhstan',   lat:48,   lng:68,   pct: 3.5, rank:7},
+      {country:'Mexico',       lat:24,   lng:-102, pct: 3.4, rank:8},
+      {country:'Uzbekistan',   lat:41,   lng:64,   pct: 3.0, rank:9},
+      {country:'Indonesia',    lat:-5,   lng:120,  pct: 2.8, rank:10},
+    ],
+    consumers:[
+      {country:'China',        lat:35,   lng:105,  pct:28.5, rank:1},
+      {country:'India',        lat:21,   lng:78,   pct:22.4, rank:2},
+      {country:'USA',          lat:38,   lng:-97,  pct: 7.8, rank:3},
+      {country:'UAE',          lat:24,   lng:54,   pct: 3.8, rank:4},
+      {country:'Russia',       lat:60,   lng:100,  pct: 3.5, rank:5},
+      {country:'Turkey',       lat:39,   lng:35,   pct: 2.9, rank:6},
+      {country:'Saudi Arabia', lat:24,   lng:45,   pct: 2.7, rank:7},
+      {country:'UK',           lat:54,   lng:-2,   pct: 2.5, rank:8},
+      {country:'Italy',        lat:43,   lng:12,   pct: 2.2, rank:9},
+      {country:'France',       lat:46,   lng:2,    pct: 2.0, rank:10},
+    ]
+  },
+  {
+    id:'copper', label:'COPPER', ticker:'HG=F · COMEX', color:'#D85A30', hasGlobe:true,
+    producers:[
+      {country:'Chile',        lat:-30,  lng:-71,  pct:27.0, rank:1},
+      {country:'Peru',         lat:-10,  lng:-76,  pct:10.2, rank:2},
+      {country:'Congo DRC',    lat:-4,   lng:24,   pct: 9.8, rank:3},
+      {country:'China',        lat:35,   lng:105,  pct: 8.4, rank:4},
+      {country:'USA',          lat:38,   lng:-97,  pct: 5.8, rank:5},
+      {country:'Australia',    lat:-25,  lng:134,  pct: 4.6, rank:6},
+      {country:'Russia',       lat:60,   lng:100,  pct: 3.9, rank:7},
+      {country:'Zambia',       lat:-13,  lng:28,   pct: 3.6, rank:8},
+      {country:'Mexico',       lat:24,   lng:-102, pct: 3.1, rank:9},
+      {country:'Indonesia',    lat:-5,   lng:120,  pct: 2.9, rank:10},
+    ],
+    consumers:[
+      {country:'China',        lat:35,   lng:105,  pct:54.0, rank:1},
+      {country:'USA',          lat:38,   lng:-97,  pct: 8.0, rank:2},
+      {country:'Germany',      lat:51,   lng:10,   pct: 4.5, rank:3},
+      {country:'Japan',        lat:36,   lng:138,  pct: 4.0, rank:4},
+      {country:'South Korea',  lat:37,   lng:128,  pct: 2.9, rank:5},
+      {country:'India',        lat:21,   lng:78,   pct: 2.5, rank:6},
+      {country:'Russia',       lat:60,   lng:100,  pct: 2.0, rank:7},
+      {country:'Italy',        lat:43,   lng:12,   pct: 1.8, rank:8},
+      {country:'Turkey',       lat:39,   lng:35,   pct: 1.7, rank:9},
+      {country:'Brazil',       lat:-15,  lng:-51,  pct: 1.5, rank:10},
+    ]
+  },
+  {
+    id:'silver', label:'SILVER', ticker:'SI=F · COMEX', color:'#888780', hasGlobe:true,
+    producers:[
+      {country:'Mexico',       lat:24,   lng:-102, pct:23.0, rank:1},
+      {country:'China',        lat:35,   lng:105,  pct:13.0, rank:2},
+      {country:'Peru',         lat:-10,  lng:-76,  pct:12.3, rank:3},
+      {country:'Chile',        lat:-30,  lng:-71,  pct: 5.5, rank:4},
+      {country:'Russia',       lat:60,   lng:100,  pct: 5.0, rank:5},
+      {country:'Poland',       lat:52,   lng:20,   pct: 4.7, rank:6},
+      {country:'Bolivia',      lat:-17,  lng:-65,  pct: 4.6, rank:7},
+      {country:'Australia',    lat:-25,  lng:134,  pct: 4.4, rank:8},
+      {country:'Argentina',    lat:-34,  lng:-64,  pct: 3.2, rank:9},
+      {country:'India',        lat:21,   lng:78,   pct: 2.3, rank:10},
+    ],
+    consumers:[
+      {country:'USA',          lat:38,   lng:-97,  pct:22.0, rank:1},
+      {country:'China',        lat:35,   lng:105,  pct:19.0, rank:2},
+      {country:'India',        lat:21,   lng:78,   pct:12.0, rank:3},
+      {country:'Japan',        lat:36,   lng:138,  pct: 7.0, rank:4},
+      {country:'Germany',      lat:51,   lng:10,   pct: 6.0, rank:5},
+      {country:'Mexico',       lat:24,   lng:-102, pct: 4.5, rank:6},
+      {country:'South Korea',  lat:37,   lng:128,  pct: 4.0, rank:7},
+      {country:'Russia',       lat:60,   lng:100,  pct: 3.5, rank:8},
+      {country:'Italy',        lat:43,   lng:12,   pct: 3.0, rank:9},
+      {country:'UK',           lat:54,   lng:-2,   pct: 2.5, rank:10},
+    ]
+  },
+  {
+    id:'corn', label:'CORN', ticker:'ZC=F · CBOT', color:'#639922', hasGlobe:true,
+    producers:[
+      {country:'USA',          lat:38,   lng:-97,  pct:31.6, rank:1},
+      {country:'China',        lat:35,   lng:105,  pct:23.0, rank:2},
+      {country:'Brazil',       lat:-15,  lng:-51,  pct:11.4, rank:3},
+      {country:'EU',           lat:50,   lng:15,   pct: 5.2, rank:4},
+      {country:'Argentina',    lat:-34,  lng:-64,  pct: 5.0, rank:5},
+      {country:'India',        lat:21,   lng:78,   pct: 2.9, rank:6},
+      {country:'Ukraine',      lat:49,   lng:31,   pct: 2.7, rank:7},
+      {country:'Mexico',       lat:24,   lng:-102, pct: 2.2, rank:8},
+      {country:'South Africa', lat:-30,  lng:26,   pct: 1.3, rank:9},
+      {country:'Canada',       lat:60,   lng:-95,  pct: 1.2, rank:10},
+    ],
+    consumers:[
+      {country:'USA',          lat:38,   lng:-97,  pct:26.8, rank:1},
+      {country:'China',        lat:35,   lng:105,  pct:24.5, rank:2},
+      {country:'EU',           lat:50,   lng:15,   pct: 7.2, rank:3},
+      {country:'Brazil',       lat:-15,  lng:-51,  pct: 6.8, rank:4},
+      {country:'Mexico',       lat:24,   lng:-102, pct: 3.6, rank:5},
+      {country:'India',        lat:21,   lng:78,   pct: 3.4, rank:6},
+      {country:'Argentina',    lat:-34,  lng:-64,  pct: 1.8, rank:7},
+      {country:'Egypt',        lat:27,   lng:30,   pct: 1.5, rank:8},
+      {country:'Japan',        lat:36,   lng:138,  pct: 1.5, rank:9},
+      {country:'South Korea',  lat:37,   lng:128,  pct: 1.4, rank:10},
+    ]
+  },
+  {
+    id:'wheat', label:'WHEAT', ticker:'ZW=F · CBOT', color:'#1D9E75', hasGlobe:true,
+    producers:[
+      {country:'China',        lat:35,   lng:105,  pct:17.3, rank:1},
+      {country:'India',        lat:21,   lng:78,   pct:14.2, rank:2},
+      {country:'Russia',       lat:60,   lng:100,  pct:11.6, rank:3},
+      {country:'USA',          lat:38,   lng:-97,  pct: 6.3, rank:4},
+      {country:'Australia',    lat:-25,  lng:134,  pct: 5.0, rank:5},
+      {country:'France',       lat:46,   lng:2,    pct: 4.5, rank:6},
+      {country:'Canada',       lat:60,   lng:-95,  pct: 4.1, rank:7},
+      {country:'Pakistan',     lat:30,   lng:69,   pct: 3.5, rank:8},
+      {country:'Ukraine',      lat:49,   lng:31,   pct: 3.4, rank:9},
+      {country:'Germany',      lat:51,   lng:10,   pct: 2.8, rank:10},
+    ],
+    consumers:[
+      {country:'China',        lat:35,   lng:105,  pct:19.8, rank:1},
+      {country:'India',        lat:21,   lng:78,   pct:13.7, rank:2},
+      {country:'EU',           lat:50,   lng:15,   pct:12.5, rank:3},
+      {country:'Russia',       lat:60,   lng:100,  pct: 5.7, rank:4},
+      {country:'USA',          lat:38,   lng:-97,  pct: 4.4, rank:5},
+      {country:'Egypt',        lat:27,   lng:30,   pct: 3.8, rank:6},
+      {country:'Pakistan',     lat:30,   lng:69,   pct: 3.5, rank:7},
+      {country:'Turkey',       lat:39,   lng:35,   pct: 2.8, rank:8},
+      {country:'Iran',         lat:32,   lng:53,   pct: 2.5, rank:9},
+      {country:'Brazil',       lat:-15,  lng:-51,  pct: 1.8, rank:10},
+    ]
+  },
+  {
+    id:'sp500', label:'S&P 500', ticker:'^GSPC · NYSE', color:'#7F77DD', hasGlobe:false,
+    fallback:{
+      title:'EQUITY INDEX — NO GEOGRAPHIC VIEW',
+      body:'The S&P 500 is a market-cap-weighted index of 500 US-listed companies. It has no physical commodity supply chain. A geographic producer / consumer breakdown is not meaningful for equity indices.'
+    }
+  }
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let selectedAsset  = ASSETS[0];
+let viewMode       = 'producers';
+let autoRotate     = true;
+let rotateTimer    = null;
+let projection, pathFn;
+let svgEl          = d3.select('#globe-svg');
+let globeSize      = 0;
+let scaleMult      = 1;
+let worldData      = null;
+let animateDots    = false; // true only on asset/mode switch, not during rotation
+let dotsLocked     = false; // true during elastic entry animation — skip dot redraw
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  LAYER 1 INTEGRATION
+//  From your Layer 1 node click handler call:
+//    window.setGlobeAsset('crude_oil');
+//  Valid IDs: crude_oil | usd_index | gold | copper | silver | corn | wheat | sp500
+// ─────────────────────────────────────────────────────────────────────────────
+window.setGlobeAsset = function(assetId) {
+  const a = ASSETS.find(x => x.id === assetId);
+  if (a) selectAsset(a);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TABS
+// ─────────────────────────────────────────────────────────────────────────────
+const tabsEl = document.getElementById('tabs');
+ASSETS.forEach(a => {
+  const div = document.createElement('div');
+  div.className = 'tab' + (a.id === selectedAsset.id ? ' active' : '');
+  div.dataset.id = a.id;
+  div.innerHTML = `<span class="tab-dot" style="background:${a.color}"></span>${a.label}`;
+  div.addEventListener('click', () => selectAsset(a));
+  tabsEl.appendChild(div);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GLOBE INIT
+// ─────────────────────────────────────────────────────────────────────────────
+const globeWrap = document.getElementById('globe-wrap');
+
+function getSize() {
+  const r = globeWrap.getBoundingClientRect();
+  return Math.min(r.width, r.height) * 0.82;
+}
+
+function initGlobe() {
+  globeSize = getSize();
+
+  projection = d3.geoOrthographic()
+    .scale(globeSize / 2)
+    .translate([globeSize / 2, globeSize / 2])
+    .clipAngle(90)
+    .rotate([20, -30]);
+
+  pathFn = d3.geoPath().projection(projection);
+  svgEl.attr('width', globeSize).attr('height', globeSize);
+
+  // Glow filters
+  const defs = svgEl.append('defs');
+  [['producer','#39ff14'],['consumer','#00bfff'],['both','#ffa500']].forEach(([type]) => {
+    const f = defs.append('filter').attr('id',`glow-${type}`)
+      .attr('x','-60%').attr('y','-60%').attr('width','220%').attr('height','220%');
+    f.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','3').attr('result','blur');
+    const m = f.append('feMerge');
+    m.append('feMergeNode').attr('in','blur');
+    m.append('feMergeNode').attr('in','SourceGraphic');
+  });
+
+  // Rim-light blur filter
+  const rimF = defs.append('filter').attr('id','rim-blur')
+    .attr('x','-30%').attr('y','-30%').attr('width','160%').attr('height','160%');
+  rimF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','18');
+
+  // Country highlight glow filter
+  const hlF = defs.append('filter').attr('id','country-glow')
+    .attr('x','-20%').attr('y','-20%').attr('width','140%').attr('height','140%');
+  hlF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','4').attr('result','blur');
+  const hlM = hlF.append('feMerge');
+  hlM.append('feMergeNode').attr('in','blur');
+  hlM.append('feMergeNode').attr('in','SourceGraphic');
+
+  // Radial gradient for 3D sphere depth
+  const grad = defs.append('radialGradient')
+    .attr('id', 'sphere-depth')
+    .attr('cx', '38%').attr('cy', '36%')
+    .attr('r', '60%');
+  grad.append('stop').attr('offset', '0%').attr('stop-color', 'rgba(80,130,180,0.15)');
+  grad.append('stop').attr('offset', '55%').attr('stop-color', 'rgba(0,15,35,0.1)');
+  grad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.65)');
+
+  // Bezel
+  [4, 8].forEach((off, i) => {
+    svgEl.append('circle')
+      .attr('cx', globeSize/2).attr('cy', globeSize/2)
+      .attr('r', globeSize/2 + off).attr('fill','none')
+      .attr('stroke', i===0 ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.03)')
+      .attr('stroke-width', 1);
+  });
+  for (let deg = 0; deg < 360; deg += 5) {
+    const rad = deg * Math.PI / 180;
+    const r1 = globeSize/2 + 4;
+    const r2 = globeSize/2 + (deg % 30 === 0 ? 14 : 8);
+    svgEl.append('line')
+      .attr('x1', globeSize/2 + r1*Math.cos(rad)).attr('y1', globeSize/2 + r1*Math.sin(rad))
+      .attr('x2', globeSize/2 + r2*Math.cos(rad)).attr('y2', globeSize/2 + r2*Math.sin(rad))
+      .attr('stroke', deg%30===0 ? 'rgba(255,255,255,.15)' : 'rgba(255,255,255,.06)')
+      .attr('stroke-width', .5);
+  }
+
+  // ── Globe layers ─────────────────────────────────────────────────────────────
+  const g = svgEl.append('g').attr('class','globe-g');
+  g.append('path').datum({type:'Sphere'}).attr('class','sphere').attr('d', pathFn);
+  g.append('path').datum(d3.geoGraticule()()).attr('class','graticule').attr('d', pathFn);
+  g.append('path').attr('class','land');
+  g.append('path').attr('class','borders');
+  g.append('path').attr('class','country-highlight')   // hover highlight — below dots
+    .attr('fill','none').attr('pointer-events','none');
+  svgEl.append('g').attr('class','dots');
+
+  // Depth shading overlay — rendered on top of land, below dots
+  svgEl.append('circle')
+    .attr('class', 'sphere-shade')
+    .attr('cx', globeSize/2).attr('cy', globeSize/2)
+    .attr('r', globeSize/2)
+    .attr('fill', 'url(#sphere-depth)')
+    .attr('pointer-events', 'none')
+    .style('z-index', 1);
+
+  // Load world topology
+  fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+    .then(r => r.json())
+    .then(world => {
+      worldData = world;
+      svgEl.select('.land')
+        .datum(topojson.feature(world, world.objects.countries))
+        .attr('d', pathFn);
+      svgEl.select('.borders')
+        .datum(topojson.mesh(world, world.objects.countries, (a,b) => a !== b))
+        .attr('d', pathFn);
+      renderDots();
+    })
+    .catch(() => renderDots());
+
+  // Drag to rotate
+  let dragOrigin = null, rotOrigin = null;
+  svgEl.call(d3.drag()
+    .on('start', ev => {
+      autoRotate = false;
+      if (rotateTimer) { rotateTimer.stop(); rotateTimer = null; }
+      if (focusTimeoutId) { clearTimeout(focusTimeoutId); focusTimeoutId = null; }
+      document.querySelectorAll('.rank-item.selected').forEach(el => el.classList.remove('selected'));
+      hideTip();
+      dragOrigin = [ev.x, ev.y];
+      rotOrigin  = [...projection.rotate()];
+    })
+    .on('drag', ev => {
+      if (!dragOrigin) return;
+      const dx = ev.x - dragOrigin[0], dy = ev.y - dragOrigin[1];
+      projection.rotate([
+        rotOrigin[0] + dx * .3,
+        Math.max(-70, Math.min(70, rotOrigin[1] - dy * .3))
+      ]);
+      redrawAll();
+    })
+    .on('end', () => {
+      dragOrigin = null;
+      setTimeout(() => { autoRotate = true; startAutoRotate(); }, 3000);
+    })
+  );
+
+  // Scroll to zoom — CSS transform on SVG so everything scales uniformly
+  globeWrap.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    scaleMult = Math.max(0.5, Math.min(2.5, scaleMult * (ev.deltaY < 0 ? 1.08 : 0.93)));
+    svgEl.node().style.transform = `scale(${scaleMult})`;
+    svgEl.node().style.transformOrigin = '50% 50%';
+  }, { passive: false });
+
+  startAutoRotate();
+}
+
+function startAutoRotate() {
+  if (rotateTimer) { rotateTimer.stop(); rotateTimer = null; }
+  rotateTimer = d3.timer(() => {
+    if (!autoRotate) return;
+    const r = projection.rotate();
+    projection.rotate([r[0] + .06, r[1]]);
+    redrawAll();
+  });
+}
+
+function redrawAll() {
+  pathFn = d3.geoPath().projection(projection);
+  svgEl.select('.sphere').attr('d', pathFn({type:'Sphere'}));
+  svgEl.select('.graticule').attr('d', pathFn(d3.geoGraticule()()));
+  if (worldData) {
+    svgEl.select('.land').attr('d', pathFn(topojson.feature(worldData, worldData.objects.countries)));
+    svgEl.select('.borders').attr('d', pathFn(topojson.mesh(worldData, worldData.objects.countries, (a,b)=>a!==b)));
+    const hl = svgEl.select('.country-highlight');
+    if (hl.datum()) hl.attr('d', pathFn);
+  }
+  if (!dotsLocked) renderDots();
+  updateTipPosition();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  DOTS
+// ─────────────────────────────────────────────────────────────────────────────
+function isVisible(lng, lat) {
+  const r = projection.rotate();
+  const d = Math.acos(
+    Math.sin(-r[1]*Math.PI/180)*Math.sin(lat*Math.PI/180) +
+    Math.cos(-r[1]*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.cos((lng+r[0])*Math.PI/180)
+  ) * 180/Math.PI;
+  return d < 88;
+}
+
+function renderDots() {
+  if (!selectedAsset.hasGlobe) return;
+  const dotsG = svgEl.select('.dots');
+  dotsG.selectAll('*').remove();
+
+  const a = selectedAsset;
+  const colorMap = { producer:'#39ff14', consumer:'#00bfff', both:'#ffa500' };
+
+  let entries;
+  if (viewMode === 'producers') {
+    entries = a.producers.map(d => ({...d, type:'producer'}));
+  } else {
+    entries = a.consumers.map(d => ({...d, type:'consumer'}));
+  }
+
+  const maxPct = d3.max(entries, d => d.pct);
+  const rScale = d3.scaleSqrt().domain([0, maxPct]).range([3, 14]);
+
+  entries.forEach(d => {
+    if (!isVisible(d.lng, d.lat)) return;
+    const coords = projection([d.lng, d.lat]);
+    if (!coords) return;
+    const r   = rScale(d.pct);
+    const col = colorMap[d.type];
+
+    // Halo
+    dotsG.append('circle')
+      .attr('cx', coords[0]).attr('cy', coords[1])
+      .attr('r', r * 2.2).attr('fill', col).attr('opacity', .08)
+      .attr('filter', `url(#glow-${d.type})`);
+
+    // Ring
+    dotsG.append('circle')
+      .attr('cx', coords[0]).attr('cy', coords[1])
+      .attr('r', r + 3).attr('fill', 'none')
+      .attr('stroke', col).attr('stroke-width', .5).attr('opacity', .3);
+
+    // Dot — animated entry when switching asset/mode
+    const dot = dotsG.append('circle')
+      .attr('cx', coords[0]).attr('cy', coords[1])
+      .attr('fill', col).attr('opacity', .9)
+      .attr('class', 'country-dot').attr('filter', `url(#glow-${d.type})`)
+      .on('mousemove', ev => showTip(d))
+      .on('mouseleave', hideTip);
+
+    if (animateDots) {
+      dot.attr('r', 0)
+        .transition()
+        .duration(500)
+        .delay(d.rank * 40)
+        .ease(d3.easeElasticOut.amplitude(1).period(0.4))
+        .attr('r', r);
+    } else {
+      dot.attr('r', r);
+    }
+
+    // Rank label
+    dotsG.append('text')
+      .attr('x', coords[0]).attr('y', coords[1] + .5)
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .attr('font-family','Courier New,monospace')
+      .attr('font-size', r > 8 ? 7 : 5)
+      .attr('fill','#000').attr('font-weight','bold')
+      .attr('pointer-events','none').text(d.rank);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  COUNTRY ISO LOOKUP  (topojson countries-110m numeric IDs)
+// ─────────────────────────────────────────────────────────────────────────────
+const COUNTRY_ISO = {
+  'USA':840, 'Russia':643, 'Saudi Arabia':682, 'Iraq':368, 'Canada':124,
+  'UAE':784, 'Iran':364, 'China':156, 'Kuwait':414, 'Brazil':76,
+  'India':356, 'Japan':392, 'South Korea':410, 'Germany':276,
+  'Australia':36, 'Ghana':288, 'Kazakhstan':398, 'Mexico':484,
+  'Uzbekistan':860, 'Indonesia':360, 'Chile':152, 'Peru':604,
+  'Congo DRC':180, 'Zambia':894, 'Poland':616, 'Bolivia':68,
+  'Argentina':32, 'UK':826, 'Turkey':792, 'Italy':380,
+  'France':250, 'Ukraine':804, 'South Africa':710, 'Egypt':818,
+  'Pakistan':586, 'Romania':642, 'Sudan':729,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TOOLTIP — tracks dot's live projected position on every frame
+// ─────────────────────────────────────────────────────────────────────────────
+const ttEl = document.getElementById('tooltip');
+let hoveredDot = null; // geographic data of currently hovered dot
+
+function showTip(d) {
+  hoveredDot = d;
+  document.getElementById('tt-role').textContent = d.type.toUpperCase() + ' #' + d.rank;
+  document.getElementById('tt-name').textContent = d.country.toUpperCase();
+  document.getElementById('tt-stat').textContent =
+    'SHARE: ' + d.pct.toFixed(1) + '% of global ' + (d.type === 'consumer' ? 'demand' : 'supply');
+  ttEl.classList.add('visible');
+  updateTipPosition();
+
+  // Country polygon highlight
+  const isoId = COUNTRY_ISO[d.country];
+  const hlColor = d.type === 'consumer' ? '#00bfff' : '#39ff14';
+  if (isoId && worldData) {
+    const feature = topojson.feature(worldData, worldData.objects.countries);
+    const match = feature.features.find(f => +f.id === isoId);
+    if (match) {
+      svgEl.select('.country-highlight')
+        .datum(match)
+        .attr('d', pathFn)
+        .attr('fill', hlColor)
+        .attr('fill-opacity', 0)
+        .attr('stroke', hlColor)
+        .attr('stroke-width', 0.8)
+        .attr('stroke-opacity', 0)
+        .attr('filter', 'url(#country-glow)')
+        .transition().duration(200)
+        .attr('fill-opacity', 0.18)
+        .attr('stroke-opacity', 0.7);
+    }
+  }
+}
+
+function updateTipPosition() {
+  if (!hoveredDot) return;
+  // If dot is no longer on visible hemisphere, hide
+  if (!isVisible(hoveredDot.lng, hoveredDot.lat)) { hideTip(); return; }
+  const coords = projection([hoveredDot.lng, hoveredDot.lat]);
+  if (!coords) { hideTip(); return; }
+  // Convert SVG coords → screen coords (accounting for CSS scale transform)
+  const svgNode = svgEl.node();
+  const svgRect = svgNode.getBoundingClientRect();
+  const svgW = parseFloat(svgNode.getAttribute('width'));
+  const svgH = parseFloat(svgNode.getAttribute('height'));
+  const scaleX = svgRect.width  / svgW;
+  const scaleY = svgRect.height / svgH;
+  const screenX = svgRect.left + coords[0] * scaleX;
+  const screenY = svgRect.top  + coords[1] * scaleY;
+  ttEl.style.left = (screenX + 14) + 'px';
+  ttEl.style.top  = (screenY - 10) + 'px';
+}
+
+function hideTip() {
+  hoveredDot = null;
+  ttEl.classList.remove('visible');
+  svgEl.select('.country-highlight')
+    .transition().duration(250)
+    .attr('fill-opacity', 0)
+    .attr('stroke-opacity', 0);
+}
+
+// Hide when mouse leaves a dot
+document.addEventListener('mousemove', ev => {
+  if (!hoveredDot) return;
+  if (!ev.target.classList.contains('country-dot')) hideTip();
+});
+
+// Also hide when leaving the globe area entirely
+document.getElementById('globe-wrap').addEventListener('mouseleave', hideTip);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SIDE PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+function updatePanel() {
+  const a = selectedAsset;
+  document.getElementById('asset-name').textContent   = a.label;
+  document.getElementById('asset-ticker').textContent = a.ticker;
+
+  const list = document.getElementById('rank-list');
+  list.innerHTML = '';
+  if (!a.hasGlobe) return;
+
+  function makeSection(entries, label, col) {
+    const hdr = document.createElement('div');
+    hdr.className = 'rank-header';
+    hdr.innerHTML = `<span>${label}</span><span>SHARE</span>`;
+    list.appendChild(hdr);
+    const maxP = d3.max(entries, d => d.pct);
+    entries.forEach(d => {
+      const item = document.createElement('div');
+      item.className = 'rank-item';
+      item.innerHTML = `
+        <span class="rank-num">${d.rank}</span>
+        <div class="rank-bar-wrap">
+          <div class="rank-bar" style="width:${(d.pct/maxP)*100}%;background:${col};opacity:.7"></div>
+        </div>
+        <span class="rank-name">${d.country.toUpperCase()}</span>
+        <span class="rank-pct">${d.pct.toFixed(1)}%</span>`;
+      item.addEventListener('click', () => focusCountry(d, item));
+      list.appendChild(item);
+    });
+  }
+
+  if (viewMode === 'producers') {
+    makeSection(a.producers, '// TOP PRODUCERS', '#39ff14');
+  } else {
+    makeSection(a.consumers, '// TOP CONSUMERS', '#00bfff');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FOCUS COUNTRY
+// ─────────────────────────────────────────────────────────────────────────────
+let focusTimeoutId = null;
+
+function focusCountry(d, listItemEl) {
+  if (focusTimeoutId) { clearTimeout(focusTimeoutId); focusTimeoutId = null; }
+  autoRotate = false;
+  if (rotateTimer) { rotateTimer.stop(); rotateTimer = null; }
+
+  document.querySelectorAll('.rank-item.selected').forEach(el => el.classList.remove('selected'));
+  if (listItemEl) listItemEl.classList.add('selected');
+
+  const s = [...projection.rotate()];
+  const e = [-d.lng, -d.lat];
+  const startTime = performance.now();
+  const duration = 650;
+
+  function step(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const p = 1 - Math.pow(1 - t, 3);
+    projection.rotate([ s[0]+(e[0]-s[0])*p, s[1]+(e[1]-s[1])*p ]);
+    redrawAll();
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      focusTimeoutId = setTimeout(() => {
+        focusTimeoutId = null;
+        document.querySelectorAll('.rank-item.selected').forEach(el => el.classList.remove('selected'));
+        autoRotate = true;
+        startAutoRotate();
+      }, 4000);
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SELECT ASSET
+// ─────────────────────────────────────────────────────────────────────────────
+function selectAsset(asset) {
+  selectedAsset = asset;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.id === asset.id));
+
+  const hasGlobe = asset.hasGlobe;
+  globeWrap.style.display        = hasGlobe ? 'flex'  : 'none';
+  document.getElementById('fallback').classList.toggle('show', !hasGlobe);
+  document.getElementById('toggle-section').style.display = hasGlobe ? 'block' : 'none';
+  document.getElementById('source-strip').style.display   = hasGlobe ? 'block' : 'none';
+
+  if (!hasGlobe) {
+    document.getElementById('fallback-title').textContent = asset.fallback.title;
+    document.getElementById('fallback-body').textContent  = asset.fallback.body;
+    document.getElementById('rank-list').innerHTML = '';
+    document.getElementById('asset-name').textContent   = asset.label;
+    document.getElementById('asset-ticker').textContent = asset.ticker;
+    return;
+  }
+
+  if (focusTimeoutId) { clearTimeout(focusTimeoutId); focusTimeoutId = null; }
+  document.querySelectorAll('.rank-item.selected').forEach(el => el.classList.remove('selected'));
+  animateDots = true;
+  dotsLocked  = true;
+  autoRotate  = false;
+  renderDots();
+  animateDots = false;
+  setTimeout(() => {
+    dotsLocked = false;
+    autoRotate = true;
+  }, 950);
+  updatePanel();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TOGGLE BUTTONS
+// ─────────────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    viewMode = btn.dataset.mode;
+    document.querySelectorAll('.toggle-btn').forEach(b => {
+      b.className = 'toggle-btn';
+      if (b.dataset.mode === 'producers' && viewMode === 'producers') b.classList.add('act-prod');
+      if (b.dataset.mode === 'consumers' && viewMode === 'consumers') b.classList.add('act-cons');
+    });
+    if (focusTimeoutId) { clearTimeout(focusTimeoutId); focusTimeoutId = null; }
+    document.querySelectorAll('.rank-item.selected').forEach(el => el.classList.remove('selected'));
+    animateDots = true;
+    dotsLocked  = true;
+    autoRotate  = false;
+    updatePanel();
+    renderDots();
+    animateDots = false;
+    setTimeout(() => {
+      dotsLocked = false;
+      autoRotate = true;
+    }, 950);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RESIZE
+// ─────────────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  globeSize = getSize();
+  svgEl.attr('width', globeSize).attr('height', globeSize);
+  projection.scale(globeSize / 2).translate([globeSize/2, globeSize/2]);
+  redrawAll();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────────────────────────
+initGlobe();
+updatePanel();
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PAGE TRANSITIONS + DEEP LINK
+// ─────────────────────────────────────────────────────────────────────────────
+// Fade in
+window.addEventListener('load', () => {
+  setTimeout(() => document.getElementById('fade-overlay').classList.add('gone'), 50);
+});
+
+// Read URL hash on load — e.g. globe.html#gold → select gold asset
+(function readHashOnLoad() {
+  const hash = window.location.hash.replace('#','').toLowerCase().trim();
+  if (!hash) return;
+  const match = ASSETS.find(a => a.id === hash);
+  if (match) selectAsset(match);
+})();
+
+// Fade out then navigate back to index
+function leaveToIndex() {
+  const overlay = document.getElementById('fade-overlay');
+  overlay.classList.remove('gone');
+  overlay.classList.add('active');
+  setTimeout(() => { window.location.href = 'index.html'; }, 700);
+}
+
+// ESC also goes back
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') leaveToIndex();
+});
+</script>
+</body>
+</html>

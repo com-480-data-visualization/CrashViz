@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARKET REGIME NAVIGATOR // 2000–2025</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg:#000; --border:rgba(255,255,255,0.07); --dim:rgba(255,255,255,0.22);
+  --mid:rgba(255,255,255,0.55); --hi:rgba(255,255,255,0.9);
+  --green:#39ff14; --red:#ff3333; --orange:#ffa500;
+  --mono:'Courier New','Lucida Console',monospace;
+}
+
+html { height:100%; overflow:hidden; }
+body {
+  background:var(--bg); color:var(--hi); font-family:var(--mono);
+  font-size:11px; height:100vh; overflow:hidden;
+  display:flex; flex-direction:column; letter-spacing:0.03em;
+}
+
+/* ── HEADER ────────────────────────────────────────────────────── */
+#header {
+  flex-shrink:0; height:36px; border-bottom:0.5px solid var(--border);
+  display:flex; align-items:center; padding:0 16px; gap:20px;
+  background:rgba(0,0,0,0.96); z-index:100; position:relative;
+}
+.logo { font-size:12px; font-weight:bold; letter-spacing:0.14em; }
+.logo .accent { color:var(--green); }
+.hstat { font-size:9px; color:var(--dim); display:flex; align-items:center; gap:5px; }
+.hstat b { color:var(--mid); font-weight:normal; }
+#date-display { margin-left:auto; font-size:14px; letter-spacing:0.1em; color:var(--green); font-weight:bold; }
+#regime-label { font-size:9px; padding:2px 10px; border:0.5px solid; letter-spacing:0.12em; transition:color 0.6s,border-color 0.6s; }
+.regime-stable { color:var(--green); border-color:rgba(57,255,20,0.4); }
+.regime-stress  { color:var(--orange); border-color:rgba(255,165,0,0.4); }
+.regime-crisis  { color:var(--red);    border-color:rgba(255,51,51,0.4); }
+
+/* Glitch effect on regime crossing */
+@keyframes glitch {
+  0%   { text-shadow:2px 0 #ff0000,-2px 0 #00ffff; transform:translateX(0); filter:none; }
+  20%  { text-shadow:-3px 0 #ff0000, 3px 0 #00ffff; transform:translateX(2px); filter:hue-rotate(80deg); }
+  40%  { text-shadow:3px 2px #ff0000,-3px-2px #00ffff; transform:translateX(-2px) skewX(4deg); }
+  60%  { text-shadow:-2px 0 #ff0000, 2px 0 #00ffff; transform:translateX(1px); filter:hue-rotate(-80deg); }
+  80%  { text-shadow:2px-2px #ff0000,-2px 2px #00ffff; transform:translateX(-1px) skewX(-2deg); }
+  100% { text-shadow:none; transform:none; filter:none; }
+}
+.glitch-active { animation:glitch 0.55s steps(2) 1; }
+@keyframes glitch-label {
+  0%,100% { opacity:1; transform:none; }
+  25%  { transform:translateX(3px); opacity:0.7; }
+  50%  { transform:translateX(-3px) scaleX(1.04); }
+  75%  { transform:translateX(1px); opacity:0.85; }
+}
+.glitch-label { animation:glitch-label 0.55s steps(3) 1; }
+
+/* ── LAYOUT ────────────────────────────────────────────────────── */
+#main { flex:1; display:flex; overflow:hidden; }
+
+/* ── TIMELINE ──────────────────────────────────────────────────── */
+#timeline-col {
+  flex-shrink:0; width:90px; border-right:0.5px solid var(--border);
+  position:relative; overflow:hidden; cursor:ns-resize; user-select:none;
+  background:rgba(0,0,0,0.5);
+}
+#timeline-track {
+  position:absolute; left:50%; transform:translateX(-50%);
+  width:0.5px; background:var(--border); top:0; bottom:0;
+}
+#cursor-line {
+  position:absolute; left:0; right:0; top:50%; height:0.5px;
+  background:rgba(57,255,20,0.25); transform:translateY(-50%);
+  pointer-events:none; z-index:10;
+}
+#cursor-line::after {
+  content:''; position:absolute; right:0; top:-3px;
+  width:6px; height:6px; background:var(--green);
+  border-radius:50%; box-shadow:0 0 8px var(--green);
+}
+#timeline-years { position:absolute; top:0; left:0; right:0; transition:transform 0.06s linear; }
+.year-tick {
+  height:38px; display:flex; align-items:center; justify-content:center;
+  position:relative; font-size:9px; color:var(--dim); letter-spacing:0.1em;
+  transition:color 0.3s;
+}
+.year-tick::before {
+  content:''; position:absolute; left:50%; top:50%;
+  transform:translate(-50%,-50%); width:6px; height:0.5px; background:var(--border);
+}
+.year-tick.active { color:var(--green); font-weight:bold; font-size:11px; }
+.year-tick.active::before { width:35px; background:var(--green); opacity:0.5; }
+.year-tick.crisis { color:rgba(255,80,80,0.6); }
+.year-tick.crisis.active { color:var(--red); }
+
+/* Crisis waypoints */
+.waypoint {
+  position:absolute; left:50%; transform:translateX(-50%);
+  width:64px; display:flex; flex-direction:column; align-items:center;
+  cursor:pointer; z-index:20; transition:opacity 0.3s;
+}
+.waypoint:hover { opacity:1 !important; }
+.waypoint-ring {
+  width:32px; height:32px; border-radius:50%;
+  border:0.5px solid; display:flex; align-items:center; justify-content:center;
+  font-size:9px; font-weight:bold; letter-spacing:0.08em;
+  transition:box-shadow 0.3s, background 0.3s;
+}
+.waypoint:hover .waypoint-ring {
+  background:rgba(255,51,51,0.15);
+  box-shadow:0 0 20px rgba(255,51,51,0.5),0 0 40px rgba(255,51,51,0.2);
+}
+.waypoint-tag {
+  font-size:7px; letter-spacing:0.12em; margin-top:4px;
+  color:rgba(255,80,80,0.5); text-align:center;
+}
+@keyframes waypointPulse {
+  0%,100% { box-shadow:0 0 8px rgba(255,51,51,0.3); }
+  50%      { box-shadow:0 0 18px rgba(255,51,51,0.7),0 0 32px rgba(255,51,51,0.3); }
+}
+.waypoint-ring.pulsing { animation:waypointPulse 2s ease-in-out infinite; }
+
+/* ── GRAPH ─────────────────────────────────────────────────────── */
+#graph-col { flex:1; position:relative; overflow:hidden; }
+#topo-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+#graph-col::after {
+  content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 3px,rgba(0,0,0,0.07) 4px);
+  pointer-events:none; z-index:10;
+}
+#graph-svg { position:absolute; inset:0; width:100%; height:100%; z-index:1; }
+#scroll-hint {
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+  font-size:9px; color:rgba(255,255,255,0.75); letter-spacing:0.14em;
+  pointer-events:none; z-index:30; white-space:nowrap;
+  background:rgba(0,0,0,0.6); padding:5px 14px;
+  border:0.5px solid rgba(255,255,255,0.18);
+  animation:hint-pulse 3s ease-in-out infinite;
+}
+@keyframes hint-pulse { 0%,100%{opacity:0.9} 50%{opacity:0.45} }
+
+/* ── RIGHT PANEL ───────────────────────────────────────────────── */
+#right-panel {
+  flex-shrink:0; width:190px; border-left:0.5px solid var(--border);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.rp-section { padding:10px 12px; border-bottom:0.5px solid var(--border); }
+.rp-label { font-size:7px; letter-spacing:0.18em; color:var(--dim); margin-bottom:8px; }
+.asset-row { display:flex; align-items:center; gap:6px; padding:4px 0; font-size:9px; color:var(--mid); }
+.asset-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.sparkline-wrap { margin-left:auto; display:flex; align-items:flex-end; gap:1.5px; height:14px; }
+.spark-bar { width:4px; border-radius:1px 1px 0 0; transition:height 0.4s, background 0.4s; }
+
+#corr-top { flex:1; overflow:hidden; padding:10px 12px; }
+.corr-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:3px 0; font-size:8px; color:var(--dim);
+  border-bottom:0.5px solid rgba(255,255,255,0.03);
+}
+.corr-pair { color:var(--dim); font-size:7.5px; }
+.corr-pos { color:var(--green); }
+.corr-neg { color:var(--red); }
+.corr-bar-bg { height:2px; background:rgba(255,255,255,0.06); margin-top:2px; }
+.corr-bar-fill { height:100%; border-radius:1px; transition:width 0.5s; }
+
+/* ── NODE SVG ─────────────────────────────────────────────────── */
+.node-label { font-family:var(--mono); font-size:9px; font-weight:bold; fill:rgba(255,255,255,0.85); text-anchor:middle; pointer-events:none; letter-spacing:0.06em; }
+.node-sub   { font-family:var(--mono); font-size:6.5px; fill:rgba(255,255,255,0.3); text-anchor:middle; pointer-events:none; }
+.node-group { cursor:pointer; }
+.link { pointer-events:none; fill:none; }
+
+/* ── NODE DOSSIER PANEL ───────────────────────────────────────── */
+#dossier-panel {
+  position:absolute; top:0; right:0; bottom:0; width:220px;
+  background:rgba(0,0,0,0.92); border-left:0.5px solid var(--border);
+  z-index:50; display:flex; flex-direction:column; overflow:hidden;
+  transform:translateX(100%); transition:transform 0.35s cubic-bezier(0.16,1,0.3,1);
+  backdrop-filter:blur(6px);
+}
+#dossier-panel.open { transform:translateX(0); }
+
+#dossier-header {
+  padding:12px 14px 10px; border-bottom:0.5px solid var(--border); flex-shrink:0;
+}
+#dossier-close {
+  position:absolute; top:10px; right:12px;
+  font-size:11px; color:var(--dim); cursor:pointer; letter-spacing:0.08em;
+  background:none; border:none; font-family:var(--mono);
+  transition:color 0.2s;
+}
+#dossier-close:hover { color:var(--hi); }
+#dossier-asset-name {
+  font-size:15px; font-weight:bold; letter-spacing:0.1em; margin-bottom:2px;
+}
+#dossier-ticker { font-size:8px; color:var(--dim); letter-spacing:0.12em; }
+#dossier-aval-row {
+  display:flex; align-items:baseline; gap:6px; margin-top:8px;
+}
+#dossier-aval-num { font-size:22px; font-weight:bold; }
+#dossier-aval-label { font-size:8px; color:var(--dim); letter-spacing:0.12em; }
+
+#dossier-body { flex:1; overflow-y:auto; padding:12px 14px; scrollbar-width:none; }
+#dossier-body::-webkit-scrollbar { display:none; }
+
+.d-section-label {
+  font-size:7px; letter-spacing:0.18em; color:var(--dim);
+  margin-bottom:8px; margin-top:12px;
+}
+.d-section-label:first-child { margin-top:0; }
+
+.d-corr-row { display:flex; align-items:center; gap:6px; padding:4px 0; }
+.d-corr-dot  { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+.d-corr-name { font-size:8.5px; color:var(--mid); width:58px; flex-shrink:0; white-space:nowrap; }
+.d-corr-bar-bg { flex:1; height:3px; background:rgba(255,255,255,0.07); position:relative; }
+.d-corr-bar-fill { position:absolute; left:0; top:0; height:100%; border-radius:2px; transition:width 0.5s; }
+.d-corr-val { font-size:8px; width:34px; text-align:right; flex-shrink:0; }
+
+#dossier-footer {
+  padding:10px 14px; border-top:0.5px solid var(--border); flex-shrink:0;
+}
+#dossier-goto {
+  display:block; width:100%; padding:8px 0;
+  border:0.5px solid rgba(57,255,20,0.4); background:transparent;
+  color:var(--green); font-family:var(--mono); font-size:9px;
+  letter-spacing:0.16em; cursor:pointer; text-align:center;
+  transition:background 0.25s, color 0.25s;
+}
+#dossier-goto:hover { background:rgba(57,255,20,0.12); }
+
+/* ── FOOTER ────────────────────────────────────────────────────── */
+#footer {
+  flex-shrink:0; height:22px; border-top:0.5px solid var(--border);
+  display:flex; align-items:center; padding:0 16px; gap:20px;
+  font-size:8px; color:var(--dim); letter-spacing:0.07em;
+}
+#footer span { color:var(--mid); }
+
+/* ── Fade overlay (page transitions) ───────────────────────────── */
+#fade-overlay {
+  position:fixed; inset:0; z-index:2000;
+  background:#000; opacity:1; pointer-events:none;
+  transition:opacity 0.7s ease;
+}
+#fade-overlay.gone   { opacity:0; }
+#fade-overlay.active { opacity:1; pointer-events:all; }
+</style>
+</head>
+<body>
+<div id="fade-overlay"></div>
+
+<div id="header">
+  <div class="logo">&gt;_ <span class="accent">MARKET</span>GRAPH</div>
+  <div class="hstat">ASSETS <b>8</b></div>
+  <div class="hstat">OBS <b>6,410</b></div>
+  <div class="hstat">WINDOW <b>63D CORR</b></div>
+  <div id="date-display">────────</div>
+  <div id="regime-label" class="regime-stable">LOADING</div>
+</div>
+
+<div id="main">
+
+  <!-- TIMELINE -->
+  <div id="timeline-col">
+    <div id="cursor-line"></div>
+    <div id="timeline-track"></div>
+    <div id="timeline-years"></div>
+    <!-- Crisis waypoints injected by JS -->
+  </div>
+
+  <!-- GRAPH -->
+  <div id="graph-col">
+    <canvas id="topo-canvas"></canvas>
+    <svg id="graph-svg"></svg>
+    <div id="scroll-hint">↕ SCROLL OR DRAG TIMELINE</div>
+
+    <!-- Node click dossier panel -->
+    <div id="dossier-panel">
+      <div id="dossier-header">
+        <button id="dossier-close" onclick="closeDossier()">✕ CLOSE</button>
+        <div id="dossier-asset-name">──────</div>
+        <div id="dossier-ticker">──────</div>
+        <div id="dossier-aval-row">
+          <div id="dossier-aval-num" style="color:var(--green)">─.──</div>
+          <div id="dossier-aval-label">AVG COUPLING</div>
+        </div>
+      </div>
+      <div id="dossier-body">
+        <div class="d-section-label">// CORRELATIONS TO ALL ASSETS</div>
+        <div id="dossier-corr-list"></div>
+        <div class="d-section-label">// REGIME CONTEXT</div>
+        <div id="dossier-regime-text" style="font-size:8.5px;color:var(--mid);line-height:1.8"></div>
+      </div>
+      <div id="dossier-footer">
+        <button id="dossier-goto" onclick="leaveToGlobe()">VIEW GEOGRAPHIC DOSSIER →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div id="right-panel">
+    <div class="rp-section">
+      <div class="rp-label">// ASSETS · AVG COUPLING</div>
+      <div id="asset-list"></div>
+    </div>
+    <div id="corr-top">
+      <div class="rp-label">// TOP CORRELATIONS</div>
+      <div id="corr-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="footer">
+  <span>SRC</span> YAHOO FINANCE · YFINANCE &nbsp;|&nbsp;
+  <span>CORR</span> 63-DAY ROLLING PEARSON &nbsp;|&nbsp;
+  <span>VIZ</span> D3.JS FORCE-DIRECTED &nbsp;|&nbsp;
+  <span>EPFL</span> DATA VISUALIZATION 2025
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DATA GLOBALS  (filled by fetch)
+══════════════════════════════════════════════════════════════════ */
+let ASSETS = [], CORR_DATA = {}, TIMELINE_KEYS = [];
+
+const LABELS  = ['CRUDE OIL','USD INDEX','GOLD','COPPER','SILVER','CORN','WHEAT','S&P 500'];
+const TICKERS = ['CL=F','DX-Y.NYB','GC=F','HG=F','SI=F','ZC=F','ZW=F','^GSPC'];
+const COLORS  = ['#BA7517','#378ADD','#EF9F27','#D85A30','#888780','#639922','#1D9E75','#7F77DD'];
+
+const CRISIS_YEARS = new Set([2001,2002,2008,2020,2022]);
+const WAYPOINTS = [
+  { year:2008, month:10, label:'GFC',   tag:'LEHMAN COLLAPSE'  },
+  { year:2020, month: 4, label:'COVID', tag:'PANDEMIC CRASH'   },
+  { year:2022, month: 6, label:'2022',  tag:'RATE HIKE SHOCK'  },
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════════ */
+function getCorr(key, i, j) { const m=CORR_DATA[key]; return m ? m[i][j] : 0; }
+
+function nearestKey(str) {
+  let best = TIMELINE_KEYS[0];
+  for (const k of TIMELINE_KEYS) { if (k <= str) best = k; }
+  return best;
+}
+function monthToStr(yr, mo) { return `${yr}-${String(mo+1).padStart(2,'0')}`; }
+
+function getRegime(key) {
+  const m = CORR_DATA[key]; if (!m) return 'stable';
+  let s=0,n=0;
+  for (let i=0;i<8;i++) for (let j=i+1;j<8;j++) { s+=Math.abs(m[i][j]); n++; }
+  const avg = s/n;
+  return avg>0.45 ? 'crisis' : avg>0.3 ? 'stress' : 'stable';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════════════ */
+let currentMonthIdx = 98;
+const TOTAL_MONTHS  = 26 * 12;
+let lastRegime = 'stable';
+// Per-asset sparkline history (last 8 snapshots of mean abs corr)
+const sparkHistory = Array.from({length:8}, ()=>[]);
+
+function idxToDate(idx) {
+  const year = 2000 + Math.floor(idx/12), month = idx%12;
+  return { year, month, str: monthToStr(year, month) };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FETCH + BOOT
+══════════════════════════════════════════════════════════════════ */
+fetch('correlation_data.json')
+  .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+  .then(json => {
+    ASSETS = json.meta.assets;
+    CORR_DATA = json.matrices;
+    TIMELINE_KEYS = json.dates.slice().sort();
+    boot();
+  })
+  .catch(err => {
+    document.body.innerHTML =
+      `<div style="color:#ff4444;font-family:monospace;padding:40px;line-height:2">
+        ERROR loading correlation_data.json<br>
+        ${err.message}<br><br>
+        Run <code>python compute_correlations.py</code> then serve with<br>
+        <code>python -m http.server</code> and open <code>http://localhost:8000</code>
+      </div>`;
+  });
+
+/* ═══════════════════════════════════════════════════════════════
+   TIMELINE BUILD
+══════════════════════════════════════════════════════════════════ */
+const TICK_H = 38;
+
+function buildTimeline() {
+  const el = document.getElementById('timeline-years');
+  for (let y=2000; y<=2025; y++) {
+    const div = document.createElement('div');
+    div.className = 'year-tick' + (CRISIS_YEARS.has(y) ? ' crisis' : '');
+    div.id = `tick-${y}`;
+    div.textContent = y;
+    el.appendChild(div);
+  }
+
+  // Crisis waypoints
+  const col = document.getElementById('timeline-col');
+  WAYPOINTS.forEach(wp => {
+    const yOffset = (wp.year - 2000) * TICK_H;
+    const div = document.createElement('div');
+    div.className = 'waypoint';
+    div.style.top = `${yOffset + TICK_H/2}px`;
+    div.style.opacity = '0.55';
+    div.innerHTML = `
+      <div class="waypoint-ring pulsing" style="color:var(--red);border-color:rgba(255,51,51,0.5)">${wp.label}</div>
+      <div class="waypoint-tag">${wp.tag}</div>`;
+    div.onclick = () => jumpTo(wp.year, wp.month);
+    col.appendChild(div);
+  });
+}
+
+function updateTimeline(year) {
+  document.querySelectorAll('.year-tick').forEach(t=>t.classList.remove('active'));
+  const el = document.getElementById(`tick-${year}`);
+  if (el) {
+    el.classList.add('active');
+    const colH = document.getElementById('timeline-col').clientHeight;
+    const offset = (year-2000)*TICK_H;
+    document.getElementById('timeline-years').style.transform =
+      `translateY(${colH/2 - offset - TICK_H/2}px)`;
+  }
+  // Reposition waypoints
+  const colH2 = document.getElementById('timeline-col').clientHeight;
+  const transform = colH2/2 - (year-2000)*TICK_H - TICK_H/2;
+  document.querySelectorAll('.waypoint').forEach((wp, i) => {
+    const yOffset = (WAYPOINTS[i].year - 2000)*TICK_H;
+    wp.style.top = `${yOffset + transform + TICK_H/2}px`;
+  });
+}
+
+function jumpTo(year, month) {
+  const targetIdx = (year-2000)*12 + (month-1);
+  // Animated scroll
+  const startIdx = currentMonthIdx;
+  const diff = targetIdx - startIdx;
+  const steps = 24;
+  let step = 0;
+  function animate() {
+    step++;
+    const t = step/steps;
+    const eased = 1 - Math.pow(1-t, 3);
+    currentMonthIdx = Math.round(startIdx + diff*eased);
+    update(currentMonthIdx);
+    if (step < steps) requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+  document.getElementById('scroll-hint').style.opacity = '0';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOPOGRAPHIC CANVAS
+══════════════════════════════════════════════════════════════════ */
+let topoCtx, topoW, topoH;
+let avgCorrGlobal = 0;
+
+function initTopo() {
+  const canvas = document.getElementById('topo-canvas');
+  const bbox = document.getElementById('graph-col').getBoundingClientRect();
+  topoW = canvas.width  = bbox.width;
+  topoH = canvas.height = bbox.height;
+  topoCtx = canvas.getContext('2d');
+}
+
+function drawTopo(nodes) {
+  if (!topoCtx) return;
+  topoCtx.clearRect(0,0,topoW,topoH);
+
+  // Centroid of all nodes
+  const cx = d3.mean(nodes, d=>d.x);
+  const cy = d3.mean(nodes, d=>d.y);
+
+  const crisis   = avgCorrGlobal > 0.45;
+  const stressed = avgCorrGlobal > 0.3;
+  const spacing  = crisis ? 18 : stressed ? 28 : 42;
+  const maxR     = Math.max(topoW, topoH) * 0.7;
+  const baseAlpha = crisis ? 0.045 : stressed ? 0.028 : 0.016;
+  const lineColor = crisis ? '255,51,51' : stressed ? '255,165,0' : '57,255,20';
+
+  for (let r=spacing; r<maxR; r+=spacing) {
+    const alpha = baseAlpha * Math.pow(1 - r/maxR, 0.6);
+    topoCtx.beginPath();
+    topoCtx.arc(cx, cy, r, 0, Math.PI*2);
+    topoCtx.strokeStyle = `rgba(${lineColor},${alpha})`;
+    topoCtx.lineWidth = crisis ? 0.8 : 0.5;
+    topoCtx.stroke();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   D3 FORCE GRAPH
+══════════════════════════════════════════════════════════════════ */
+const svg = d3.select('#graph-svg');
+let W, H;
+
+function resize() {
+  const bbox = document.getElementById('graph-col').getBoundingClientRect();
+  W = bbox.width; H = bbox.height;
+  svg.attr('width',W).attr('height',H);
+}
+
+let nodes, links, linkEls, nodeEls, simulation;
+
+function initGraph() {
+  resize();
+
+  nodes = ASSETS.map((a,i) => ({
+    id:i, name:a, label:LABELS[i], ticker:TICKERS[i], color:COLORS[i],
+    x: W/2 + Math.cos(i/8*2*Math.PI)*180,
+    y: H/2 + Math.sin(i/8*2*Math.PI)*180,
+    aval: 0.3,
+  }));
+
+  links = [];
+  for (let i=0;i<8;i++)
+    for (let j=i+1;j<8;j++)
+      links.push({source:i, target:j, corr:0});
+
+  // ── DEFS ────────────────────────────────────────────────────────
+  const defs = svg.append('defs');
+
+  // Per-asset radial gradients for 3D glass nodes
+  ASSETS.forEach((_, i) => {
+    const col = COLORS[i];
+    const hex = col.replace('#','');
+    const r = parseInt(hex.slice(0,2),16),
+          g = parseInt(hex.slice(2,4),16),
+          b = parseInt(hex.slice(4,6),16);
+
+    const grad = defs.append('radialGradient')
+      .attr('id',`ng-${i}`)
+      .attr('cx','35%').attr('cy','30%').attr('r','65%');
+    grad.append('stop').attr('offset','0%')
+      .attr('stop-color','#ffffff').attr('stop-opacity','0.85');
+    grad.append('stop').attr('offset','35%')
+      .attr('stop-color',col).attr('stop-opacity','0.9');
+    grad.append('stop').attr('offset','75%')
+      .attr('stop-color',col).attr('stop-opacity','0.7');
+    grad.append('stop').attr('offset','100%')
+      .attr('stop-color',`rgba(${r},${g},${b},0.3)`);
+
+    // Glow filter
+    const f = defs.append('filter').attr('id',`gf-${i}`)
+      .attr('x','-80%').attr('y','-80%').attr('width','260%').attr('height','260%');
+    f.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','5').attr('result','blur');
+    const m = f.append('feMerge');
+    m.append('feMergeNode').attr('in','blur');
+    m.append('feMergeNode').attr('in','SourceGraphic');
+  });
+
+  // Green glow filter for positive links
+  const posF = defs.append('filter').attr('id','link-glow-pos')
+    .attr('x','-40%').attr('y','-40%').attr('width','180%').attr('height','180%');
+  posF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','2').attr('result','b');
+  const pm = posF.append('feMerge');
+  pm.append('feMergeNode').attr('in','b');
+  pm.append('feMergeNode').attr('in','SourceGraphic');
+
+  // ── LAYERS ──────────────────────────────────────────────────────
+  const linkGroup = svg.append('g').attr('class','links');
+  const nodeGroup = svg.append('g').attr('class','nodes');
+
+  // Links as quadratic bezier paths
+  linkEls = linkGroup.selectAll('.link').data(links).enter()
+    .append('path').attr('class','link');
+
+  // Nodes
+  nodeEls = nodeGroup.selectAll('.node-group').data(nodes).enter()
+    .append('g').attr('class','node-group');
+
+  // Outer pulse halo (radius animated in JS loop)
+  nodeEls.append('circle').attr('class','pulse-halo')
+    .attr('r',28).attr('fill',d=>d.color).attr('opacity',0);
+
+  // Mid glow
+  nodeEls.append('circle').attr('class','mid-glow')
+    .attr('r',18).attr('fill',d=>d.color).attr('opacity',0.07)
+    .attr('filter',d=>`url(#gf-${d.id})`);
+
+  // Outer ring
+  nodeEls.append('circle').attr('r',13)
+    .attr('fill','none').attr('stroke',d=>d.color)
+    .attr('stroke-width',0.5).attr('opacity',0.25);
+
+  // Inner glass sphere
+  nodeEls.append('circle').attr('r',10)
+    .attr('fill',d=>`url(#ng-${d.id})`).attr('opacity',0.95);
+
+  // Labels
+  nodeEls.append('text').attr('class','node-label').attr('dy',-16)
+    .text(d=>d.label.split(' ').pop());
+  nodeEls.append('text').attr('class','node-sub').attr('dy',-7)
+    .text(d=>d.ticker);
+
+  // Click → open dossier
+  nodeEls.on('click', (event, d) => {
+    event.stopPropagation();
+    openDossier(d);
+  });
+
+  // Click on graph background → close dossier
+  svg.on('click', () => closeDossier());
+
+  // ── SIMULATION ──────────────────────────────────────────────────
+  simulation = d3.forceSimulation(nodes)
+    .force('charge', d3.forceManyBody().strength(-100))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide(32))
+    .force('link', d3.forceLink(links).id(d=>d.id)
+      .strength(d=>Math.abs(d.corr)*0.6)
+      .distance(d=>{
+        const c=Math.abs(d.corr);
+        if(c>0.6) return 80; if(c>0.3) return 145; if(c>0.1) return 210; return 290;
+      }))
+    .alphaDecay(0.02)
+    .on('tick', onTick);
+
+  window.addEventListener('resize', ()=>{
+    resize(); initTopo();
+    simulation.force('center',d3.forceCenter(W/2,H/2)).alpha(0.3).restart();
+  });
+}
+
+/* Quadratic bezier path with perpendicular curve */
+function curvePath(d) {
+  const sx = d.source.x||0, sy = d.source.y||0;
+  const tx = d.target.x||0, ty = d.target.y||0;
+  const mx = (sx+tx)/2, my = (sy+ty)/2;
+  const dx = tx-sx, dy = ty-sy;
+  const len = Math.sqrt(dx*dx+dy*dy) || 1;
+  // Positive corr curves left, negative curves right — different visual lane
+  const off = len * 0.12 * (d.corr > 0 ? 1 : -1);
+  const cpx = mx - (dy/len)*off;
+  const cpy = my + (dx/len)*off;
+  return `M${sx},${sy} Q${cpx},${cpy} ${tx},${ty}`;
+}
+
+let _animT = 0;
+function onTick() {
+  _animT = Date.now()/1000;
+
+  linkEls.attr('d', curvePath);
+
+  nodeEls.attr('transform', d =>
+    `translate(${Math.max(20,Math.min(W-20,d.x||0))},${Math.max(20,Math.min(H-20,d.y||0))})`
+  );
+
+  // Pulse halo — driven by per-node aval (avg entanglement)
+  nodeEls.select('.pulse-halo').attr('r', d => {
+    const base = 18 + d.aval * 16;
+    const pulse = Math.sin(_animT * (1 + d.aval * 2) + d.id * 0.8) * 4;
+    return base + pulse;
+  }).attr('opacity', d => d.aval * 0.12 + 0.02);
+
+  drawTopo(nodes);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ASSET LIST + SPARKLINES
+══════════════════════════════════════════════════════════════════ */
+function buildAssetList() {
+  const el = document.getElementById('asset-list');
+  el.innerHTML = '';
+  nodes.forEach(n => {
+    const row = document.createElement('div');
+    row.className = 'asset-row';
+    row.innerHTML = `
+      <span class="asset-dot" style="background:${n.color};box-shadow:0 0 4px ${n.color}"></span>
+      <span style="font-size:9px;color:var(--mid)">${n.label.split(' ').pop()}</span>
+      <div class="sparkline-wrap" id="spark-${n.id}">
+        ${Array(8).fill(0).map((_,k)=>
+          `<div class="spark-bar" id="sb-${n.id}-${k}" style="height:4px;background:${n.color};opacity:0.3"></div>`
+        ).join('')}
+      </div>`;
+    el.appendChild(row);
+  });
+}
+
+function updateSparklines(key) {
+  nodes.forEach((n,i) => {
+    // Compute mean abs corr for this asset
+    let s=0;
+    for(let j=0;j<8;j++) if(j!==i) s+=Math.abs(getCorr(key,i,j));
+    const val = s/7;
+
+    // Push to history (cap at 8)
+    sparkHistory[i].push(val);
+    if(sparkHistory[i].length>8) sparkHistory[i].shift();
+
+    // Update bars
+    const hist = sparkHistory[i];
+    const maxV = Math.max(...hist, 0.01);
+    hist.forEach((v,k) => {
+      const bar = document.getElementById(`sb-${i}-${k}`);
+      if (!bar) return;
+      const h = Math.max(2, (v/maxV)*14);
+      bar.style.height = h+'px';
+      bar.style.opacity = 0.35 + (v/maxV)*0.55;
+      bar.style.background = v>0.45 ? '#ff3333' : v>0.3 ? '#ffa500' : COLORS[i];
+    });
+
+    // Update per-node aval for pulsing
+    n.aval = val;
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LINK VISUAL UPDATE
+══════════════════════════════════════════════════════════════════ */
+function updateLinks(key) {
+  links.forEach(l => {
+    const i = l.source.id!==undefined ? l.source.id : l.source;
+    const j = l.target.id!==undefined ? l.target.id : l.target;
+    l.corr = getCorr(key, Math.min(i,j), Math.max(i,j));
+  });
+
+  const animT = Date.now()/800;
+
+  linkEls.each(function(d) {
+    const sel = d3.select(this);
+    const abs = Math.abs(d.corr);
+    const visible = abs > 0.4;
+
+    if (!visible) {
+      sel.attr('stroke','none').attr('stroke-width',0).attr('opacity',0);
+      return;
+    }
+
+    if (d.corr > 0) {
+      // Positive: glowing green animated dash — "data packets"
+      const dashLen = 12, gapLen = Math.max(4, 20*(1-abs));
+      const total = dashLen + gapLen;
+      const offset = -(animT * abs * 25) % total;
+      sel
+        .attr('stroke','#39ff14')
+        .attr('stroke-width', abs*2.5)
+        .attr('opacity', abs*0.75)
+        .attr('stroke-dasharray',`${dashLen},${gapLen}`)
+        .attr('stroke-dashoffset', offset)
+        .attr('filter','url(#link-glow-pos)');
+    } else {
+      // Negative: sharp red jagged dashes — "fracturing repulsion"
+      sel
+        .attr('stroke','#ff3333')
+        .attr('stroke-width', abs*1.5)
+        .attr('opacity', abs*0.55)
+        .attr('stroke-dasharray','2,5')
+        .attr('stroke-dashoffset', 0)
+        .attr('filter','none');
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CORR LIST
+══════════════════════════════════════════════════════════════════ */
+function updateCorrList(key) {
+  const pairs=[];
+  for(let i=0;i<8;i++) for(let j=i+1;j<8;j++)
+    pairs.push({i,j,c:getCorr(key,i,j)});
+  pairs.sort((a,b)=>Math.abs(b.c)-Math.abs(a.c));
+
+  const el = document.getElementById('corr-list');
+  el.innerHTML='';
+  pairs.slice(0,7).forEach(p=>{
+    const row = document.createElement('div');
+    row.className='corr-row';
+    const cls = p.c>0 ? 'corr-pos' : 'corr-neg';
+    const barW = Math.abs(p.c)*100;
+    const barCol = p.c>0 ? '#39ff14' : '#ff3333';
+    row.innerHTML=`
+      <div style="flex:1">
+        <div class="corr-pair">${LABELS[p.i].split(' ').pop()} × ${LABELS[p.j].split(' ').pop()}</div>
+        <div class="corr-bar-bg"><div class="corr-bar-fill" style="width:${barW}%;background:${barCol};opacity:0.6"></div></div>
+      </div>
+      <span class="${cls}" style="font-size:9px;margin-left:6px">${p.c>0?'+':''}${p.c.toFixed(2)}</span>`;
+    el.appendChild(row);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REGIME + GLITCH
+══════════════════════════════════════════════════════════════════ */
+function updateRegime(regime) {
+  const regEl = document.getElementById('regime-label');
+  const logo  = document.querySelector('.logo');
+
+  // Glitch trigger on crossing into crisis
+  if (regime === 'crisis' && lastRegime !== 'crisis') {
+    regEl.classList.add('glitch-label');
+    logo.classList.add('glitch-active');
+    setTimeout(()=>{ regEl.classList.remove('glitch-label'); logo.classList.remove('glitch-active'); }, 600);
+    document.body.style.transition = 'box-shadow 0.3s';
+    document.body.style.boxShadow  = 'inset 0 0 80px rgba(255,0,0,0.06)';
+  } else if (regime !== 'crisis') {
+    document.body.style.boxShadow = 'none';
+  }
+  lastRegime = regime;
+
+  regEl.className = 'regime-label';
+  if (regime==='crisis')  { regEl.textContent='SYSTEMIC SHOCK'; regEl.classList.add('regime-crisis'); }
+  else if (regime==='stress') { regEl.textContent='ELEVATED STRESS'; regEl.classList.add('regime-stress'); }
+  else { regEl.textContent='STABLE'; regEl.classList.add('regime-stable'); }
+
+  // Recompute global avg corr for topo
+  avgCorrGlobal = regime==='crisis' ? 0.6 : regime==='stress' ? 0.35 : 0.15;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NODE DOSSIER
+══════════════════════════════════════════════════════════════════ */
+let activeDossierNode = null;
+
+function openDossier(node) {
+  activeDossierNode = node;
+  const key = nearestKey(idxToDate(currentMonthIdx).str);
+  const panel = document.getElementById('dossier-panel');
+
+  // Header
+  document.getElementById('dossier-asset-name').textContent = node.label;
+  document.getElementById('dossier-asset-name').style.color = node.color;
+  document.getElementById('dossier-ticker').textContent = node.ticker;
+
+  // Avg coupling
+  let s=0;
+  for(let j=0;j<8;j++) if(j!==node.id) s+=Math.abs(getCorr(key,node.id,j));
+  const aval = s/7;
+  const avalEl = document.getElementById('dossier-aval-num');
+  avalEl.textContent = aval.toFixed(2);
+  avalEl.style.color = aval>0.45 ? '#ff3333' : aval>0.3 ? '#ffa500' : '#39ff14';
+
+  // Correlation list — all 7 other assets, sorted by abs value
+  const others = ASSETS.map((_,j) => ({
+    j, c: j===node.id ? null : getCorr(key,node.id,j)
+  })).filter(x=>x.c!==null).sort((a,b)=>Math.abs(b.c)-Math.abs(a.c));
+
+  const listEl = document.getElementById('dossier-corr-list');
+  listEl.innerHTML = '';
+  others.forEach(({j,c}) => {
+    const abs = Math.abs(c);
+    const col  = c>0 ? '#39ff14' : '#ff3333';
+    const barW = abs*100;
+    const row  = document.createElement('div');
+    row.className = 'd-corr-row';
+    row.innerHTML = `
+      <div class="d-corr-dot" style="background:${COLORS[j]}"></div>
+      <div class="d-corr-name">${LABELS[j].split(' ').pop()}</div>
+      <div class="d-corr-bar-bg">
+        <div class="d-corr-bar-fill" style="width:${barW}%;background:${col};opacity:0.7"></div>
+      </div>
+      <div class="d-corr-val" style="color:${col}">${c>0?'+':''}${c.toFixed(2)}</div>`;
+    listEl.appendChild(row);
+  });
+
+  // Regime context text
+  const regime = getRegime(key);
+  const regimeTexts = {
+    crisis: `${node.label.split(' ').pop()} is in high systemic coupling territory. Avg correlation ${aval.toFixed(2)} — consistent with crisis clustering where diversification benefits collapse.`,
+    stress: `${node.label.split(' ').pop()} shows elevated coupling (${aval.toFixed(2)}). Market stress is compressing cross-asset correlations above baseline levels.`,
+    stable: `${node.label.split(' ').pop()} avg coupling at ${aval.toFixed(2)} — within normal regime. Correlation structure is diffuse and diversification is effective.`,
+  };
+  document.getElementById('dossier-regime-text').textContent = regimeTexts[regime];
+
+  // Globe link — pass asset id via hash
+  const GLOBE_IDS = ['crude_oil','usd_index','gold','copper','silver','corn','wheat','sp500'];
+  document.getElementById('dossier-goto').href = `globe.html#${GLOBE_IDS[node.id]}`;
+
+  // Highlight selected node
+  nodeEls.select('.pulse-halo').attr('opacity', d => d.id===node.id ? 0.25 : null);
+
+  panel.classList.add('open');
+}
+
+function closeDossier() {
+  document.getElementById('dossier-panel').classList.remove('open');
+  activeDossierNode = null;
+}
+
+function refreshDossier(key) {
+  if (!activeDossierNode) return;
+  openDossier(activeDossierNode); // re-render with new key
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN UPDATE
+══════════════════════════════════════════════════════════════════ */
+function update(monthIdx) {
+  const {year, str} = idxToDate(monthIdx);
+  const key = nearestKey(str);
+
+  // Persist for round-trip with globe page
+  try { sessionStorage.setItem(SS_KEY_MONTH, String(monthIdx)); } catch(e) {}
+
+  document.getElementById('date-display').textContent = key;
+  updateTimeline(year);
+  updateRegime(getRegime(key));
+  updateLinks(key);
+  updateSparklines(key);
+  updateCorrList(key);
+
+  simulation.force('link').links(links).strength(d=>Math.abs(d.corr)*0.6);
+  simulation.alpha(0.45).restart();
+  refreshDossier(key);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATION LOOP  (keeps links animated even when sim is cool)
+══════════════════════════════════════════════════════════════════ */
+let lastKey = null;
+function animLoop() {
+  const key = nearestKey(idxToDate(currentMonthIdx).str);
+  if (key !== lastKey) { lastKey = key; }
+  updateLinks(key); // re-runs dashoffset each frame
+  requestAnimationFrame(animLoop);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SCROLL / DRAG
+══════════════════════════════════════════════════════════════════ */
+function bindInteraction() {
+  let scrollAcc = 0;
+  window.addEventListener('wheel', e => {
+    e.preventDefault();
+    scrollAcc += e.deltaY;
+    if (Math.abs(scrollAcc) >= 35) {
+      const d = Math.sign(scrollAcc);
+      scrollAcc = 0;
+      currentMonthIdx = Math.max(0, Math.min(TOTAL_MONTHS-1, currentMonthIdx+d));
+      update(currentMonthIdx);
+      document.getElementById('scroll-hint').style.opacity='0';
+    }
+  }, {passive:false});
+
+  let isDrag=false, dragY0=0, dragIdx0=0;
+  const col = document.getElementById('timeline-col');
+  col.addEventListener('mousedown', e=>{ isDrag=true; dragY0=e.clientY; dragIdx0=currentMonthIdx; });
+  window.addEventListener('mouseup', ()=>{ isDrag=false; });
+  window.addEventListener('mousemove', e=>{
+    if(!isDrag) return;
+    const delta = -Math.round((e.clientY-dragY0)/2.5);
+    currentMonthIdx = Math.max(0, Math.min(TOTAL_MONTHS-1, dragIdx0+delta));
+    update(currentMonthIdx);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE TRANSITIONS + STATE PERSISTENCE
+══════════════════════════════════════════════════════════════════ */
+const SS_KEY_MONTH = 'mg_currentMonth';
+const SS_KEY_ASSET = 'mg_lastAsset';
+const GLOBE_IDS = ['crude_oil','usd_index','gold','copper','silver','corn','wheat','sp500'];
+
+function leaveToGlobe() {
+  // Save state
+  sessionStorage.setItem(SS_KEY_MONTH, String(currentMonthIdx));
+  if (activeDossierNode) {
+    sessionStorage.setItem(SS_KEY_ASSET, GLOBE_IDS[activeDossierNode.id]);
+  }
+  const assetHash = activeDossierNode ? '#' + GLOBE_IDS[activeDossierNode.id] : '';
+
+  const overlay = document.getElementById('fade-overlay');
+  overlay.classList.remove('gone');
+  overlay.classList.add('active');
+  setTimeout(() => { window.location.href = 'globe.html' + assetHash; }, 700);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BOOT
+══════════════════════════════════════════════════════════════════ */
+function boot() {
+  // Restore last viewed month from sessionStorage (if returning from globe)
+  const savedMonth = sessionStorage.getItem(SS_KEY_MONTH);
+  if (savedMonth !== null) {
+    const n = parseInt(savedMonth, 10);
+    if (!isNaN(n) && n >= 0 && n < TOTAL_MONTHS) currentMonthIdx = n;
+  }
+
+  buildTimeline();
+  initTopo();
+  initGraph();
+  buildAssetList();
+  bindInteraction();
+  update(currentMonthIdx);
+  animLoop();
+
+  // Fade in
+  setTimeout(() => document.getElementById('fade-overlay').classList.add('gone'), 50);
+}
+</script>
+</body>
+</html>
