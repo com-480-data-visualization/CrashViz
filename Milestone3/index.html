@@ -30,6 +30,13 @@ body {
 }
 .logo { font-size:12px; font-weight:bold; letter-spacing:0.14em; }
 .logo .accent { color:var(--green); }
+#home-btn {
+  font-family:var(--mono); font-size:9px; letter-spacing:0.14em;
+  padding:4px 10px; background:transparent;
+  border:0.5px solid rgba(255,255,255,0.18); color:var(--mid);
+  cursor:pointer; transition:background 0.25s, color 0.25s, border-color 0.25s;
+}
+#home-btn:hover { background:rgba(57,255,20,0.1); color:var(--green); border-color:rgba(57,255,20,0.5); }
 .hstat { font-size:9px; color:var(--dim); display:flex; align-items:center; gap:5px; }
 .hstat b { color:var(--mid); font-weight:normal; }
 #date-display { margin-left:auto; font-size:14px; letter-spacing:0.1em; color:var(--green); font-weight:bold; }
@@ -251,6 +258,7 @@ body {
 
 <div id="header">
   <div class="logo">&gt;_ <span class="accent">MARKET</span>GRAPH</div>
+  <button id="home-btn" onclick="leaveToWelcome()">&lt; HOME</button>
   <div class="hstat">ASSETS <b>8</b></div>
   <div class="hstat">OBS <b>6,410</b></div>
   <div class="hstat">WINDOW <b>63D CORR</b></div>
@@ -960,6 +968,16 @@ function bindInteraction() {
 const SS_KEY_MONTH = 'mg_currentMonth';
 const SS_KEY_ASSET = 'mg_lastAsset';
 const GLOBE_IDS = ['crude_oil','usd_index','gold','copper','silver','corn','wheat','sp500'];
+
+function leaveToWelcome() {
+  // Clear saved state so welcome doesn't auto-skip
+  sessionStorage.removeItem(SS_KEY_MONTH);
+  sessionStorage.removeItem(SS_KEY_ASSET);
+  const overlay = document.getElementById('fade-overlay');
+  overlay.classList.remove('gone');
+  overlay.classList.add('active');
+  setTimeout(() => { window.location.href = 'welcome.html'; }, 700);
+}
 
 function leaveToGlobe() {
   // Save state
