@@ -32,9 +32,7 @@ To view the live website skeleton directly in your browser, click [here](https:/
 **80% of the final grade**
 
 You can find our process book [here](Milestone3/ProcessBook.pdf) and our screencast [here](Milestone3/screencast.mp4).
- 
-The entry point of the website is [here](Milestone3/welcome.html).
- 
+  
 To view the live website directly in your browser, click [here](https://com-480-data-visualization.github.io/CrashViz/Milestone3/welcome.html).
  
 ### About CrashViz
