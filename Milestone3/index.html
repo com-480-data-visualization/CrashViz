@@ -24,23 +24,28 @@ body {
 
 /* ── HEADER ────────────────────────────────────────────────────── */
 #header {
-  flex-shrink:0; height:36px; border-bottom:0.5px solid var(--border);
-  display:flex; align-items:center; padding:0 16px; gap:20px;
+  flex-shrink:0; height:48px; border-bottom:0.5px solid var(--border);
+  display:flex; align-items:center; padding:0 20px; gap:24px;
   background:rgba(0,0,0,0.96); z-index:100; position:relative;
 }
-.logo { font-size:12px; font-weight:bold; letter-spacing:0.14em; }
+.logo { font-size:15px; font-weight:bold; letter-spacing:0.16em; }
 .logo .accent { color:var(--green); }
 #home-btn {
-  font-family:var(--mono); font-size:9px; letter-spacing:0.14em;
-  padding:4px 10px; background:transparent;
-  border:0.5px solid rgba(255,255,255,0.18); color:var(--mid);
+  font-family:var(--mono); font-size:11px; letter-spacing:0.16em;
+  padding:6px 14px; background:transparent;
+  border:0.5px solid rgba(255,255,255,0.22); color:var(--mid);
   cursor:pointer; transition:background 0.25s, color 0.25s, border-color 0.25s;
 }
-#home-btn:hover { background:rgba(57,255,20,0.1); color:var(--green); border-color:rgba(57,255,20,0.5); }
-.hstat { font-size:9px; color:var(--dim); display:flex; align-items:center; gap:5px; }
-.hstat b { color:var(--mid); font-weight:normal; }
-#date-display { margin-left:auto; font-size:14px; letter-spacing:0.1em; color:var(--green); font-weight:bold; }
-#regime-label { font-size:9px; padding:2px 10px; border:0.5px solid; letter-spacing:0.12em; transition:color 0.6s,border-color 0.6s; }
+#home-btn:hover { background:rgba(57,255,20,0.12); color:var(--green); border-color:rgba(57,255,20,0.5); }
+.hstat { font-size:11px; color:var(--mid); display:flex; align-items:center; gap:6px; }
+.hstat b { color:var(--hi); font-weight:bold; }
+#date-display {
+  margin-left:auto; margin-right:auto;
+  font-size:26px; letter-spacing:0.14em; color:var(--green); font-weight:bold;
+  text-shadow:0 0 12px rgba(57,255,20,0.4);
+  font-variant-numeric:tabular-nums;
+}
+#regime-label { font-size:11px; padding:4px 14px; border:0.5px solid; letter-spacing:0.16em; font-weight:bold; transition:color 0.6s,border-color 0.6s; }
 .regime-stable { color:var(--green); border-color:rgba(57,255,20,0.4); }
 .regime-stress  { color:var(--orange); border-color:rgba(255,165,0,0.4); }
 .regime-crisis  { color:var(--red);    border-color:rgba(255,51,51,0.4); }
@@ -68,9 +73,39 @@ body {
 
 /* ── TIMELINE ──────────────────────────────────────────────────── */
 #timeline-col {
-  flex-shrink:0; width:90px; border-right:0.5px solid var(--border);
-  position:relative; overflow:hidden; cursor:ns-resize; user-select:none;
+  flex-shrink:0; width:110px; border-right:0.5px solid var(--border);
+  position:relative; overflow:hidden; user-select:none;
   background:rgba(0,0,0,0.5);
+  display:flex; flex-direction:column;
+}
+
+/* Fixed crisis nav at the top */
+#crisis-nav {
+  flex-shrink:0; padding:10px 8px 8px;
+  border-bottom:0.5px solid var(--border);
+  background:rgba(0,0,0,0.85); z-index:30;
+  display:flex; flex-direction:column; gap:5px;
+}
+.crisis-nav-label {
+  font-size:8px; color:var(--mid); letter-spacing:0.18em;
+  text-align:center; margin-bottom:4px; font-weight:bold;
+}
+.crisis-btn {
+  font-family:var(--mono); font-size:10px; letter-spacing:0.1em;
+  padding:5px 0; background:rgba(255,51,51,0.05);
+  border:0.5px solid rgba(255,51,51,0.35); color:rgba(255,80,80,0.85);
+  cursor:pointer; text-align:center; font-weight:bold;
+  transition:background 0.25s, color 0.25s, border-color 0.25s, box-shadow 0.25s;
+}
+.crisis-btn:hover {
+  background:rgba(255,51,51,0.15); color:var(--red);
+  border-color:rgba(255,51,51,0.7);
+  box-shadow:0 0 14px rgba(255,51,51,0.4);
+}
+
+/* Year strip below */
+#timeline-strip {
+  flex:1; position:relative; overflow:hidden; cursor:ns-resize;
 }
 #timeline-track {
   position:absolute; left:50%; transform:translateX(-50%);
@@ -78,55 +113,34 @@ body {
 }
 #cursor-line {
   position:absolute; left:0; right:0; top:50%; height:0.5px;
-  background:rgba(57,255,20,0.25); transform:translateY(-50%);
+  background:rgba(57,255,20,0.4); transform:translateY(-50%);
   pointer-events:none; z-index:10;
+  box-shadow:0 0 8px rgba(57,255,20,0.5);
 }
 #cursor-line::after {
-  content:''; position:absolute; right:0; top:-3px;
-  width:6px; height:6px; background:var(--green);
-  border-radius:50%; box-shadow:0 0 8px var(--green);
+  content:''; position:absolute; right:-3px; top:-4px;
+  width:8px; height:8px; background:var(--green);
+  border-radius:50%; box-shadow:0 0 12px var(--green), 0 0 24px rgba(57,255,20,0.5);
 }
 #timeline-years { position:absolute; top:0; left:0; right:0; transition:transform 0.06s linear; }
 .year-tick {
   height:38px; display:flex; align-items:center; justify-content:center;
-  position:relative; font-size:9px; color:var(--dim); letter-spacing:0.1em;
-  transition:color 0.3s;
+  position:relative; font-size:10px; color:var(--mid); letter-spacing:0.1em;
+  transition:color 0.3s, font-size 0.3s; cursor:pointer;
 }
 .year-tick::before {
   content:''; position:absolute; left:50%; top:50%;
   transform:translate(-50%,-50%); width:6px; height:0.5px; background:var(--border);
 }
-.year-tick.active { color:var(--green); font-weight:bold; font-size:11px; }
-.year-tick.active::before { width:35px; background:var(--green); opacity:0.5; }
-.year-tick.crisis { color:rgba(255,80,80,0.6); }
-.year-tick.crisis.active { color:var(--red); }
-
-/* Crisis waypoints */
-.waypoint {
-  position:absolute; left:50%; transform:translateX(-50%);
-  width:64px; display:flex; flex-direction:column; align-items:center;
-  cursor:pointer; z-index:20; transition:opacity 0.3s;
+.year-tick:hover { color:var(--hi); }
+.year-tick.active {
+  color:var(--green); font-weight:bold; font-size:18px;
+  text-shadow:0 0 8px rgba(57,255,20,0.6);
 }
-.waypoint:hover { opacity:1 !important; }
-.waypoint-ring {
-  width:32px; height:32px; border-radius:50%;
-  border:0.5px solid; display:flex; align-items:center; justify-content:center;
-  font-size:9px; font-weight:bold; letter-spacing:0.08em;
-  transition:box-shadow 0.3s, background 0.3s;
-}
-.waypoint:hover .waypoint-ring {
-  background:rgba(255,51,51,0.15);
-  box-shadow:0 0 20px rgba(255,51,51,0.5),0 0 40px rgba(255,51,51,0.2);
-}
-.waypoint-tag {
-  font-size:7px; letter-spacing:0.12em; margin-top:4px;
-  color:rgba(255,80,80,0.5); text-align:center;
-}
-@keyframes waypointPulse {
-  0%,100% { box-shadow:0 0 8px rgba(255,51,51,0.3); }
-  50%      { box-shadow:0 0 18px rgba(255,51,51,0.7),0 0 32px rgba(255,51,51,0.3); }
-}
-.waypoint-ring.pulsing { animation:waypointPulse 2s ease-in-out infinite; }
+.year-tick.active::before { width:40px; background:var(--green); opacity:0.6; }
+.year-tick.crisis { color:rgba(255,80,80,0.65); }
+.year-tick.crisis.active { color:var(--red); text-shadow:0 0 8px rgba(255,51,51,0.6); }
+.year-tick.crisis.active::before { background:var(--red); opacity:0.6; }
 
 /* ── GRAPH ─────────────────────────────────────────────────────── */
 #graph-col { flex:1; position:relative; overflow:hidden; }
@@ -149,26 +163,26 @@ body {
 
 /* ── RIGHT PANEL ───────────────────────────────────────────────── */
 #right-panel {
-  flex-shrink:0; width:190px; border-left:0.5px solid var(--border);
+  flex-shrink:0; width:240px; border-left:0.5px solid var(--border);
   display:flex; flex-direction:column; overflow:hidden;
 }
-.rp-section { padding:10px 12px; border-bottom:0.5px solid var(--border); }
-.rp-label { font-size:7px; letter-spacing:0.18em; color:var(--dim); margin-bottom:8px; }
-.asset-row { display:flex; align-items:center; gap:6px; padding:4px 0; font-size:9px; color:var(--mid); }
-.asset-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-.sparkline-wrap { margin-left:auto; display:flex; align-items:flex-end; gap:1.5px; height:14px; }
-.spark-bar { width:4px; border-radius:1px 1px 0 0; transition:height 0.4s, background 0.4s; }
+.rp-section { padding:14px 16px; border-bottom:0.5px solid var(--border); }
+.rp-label { font-size:9px; letter-spacing:0.18em; color:var(--mid); margin-bottom:10px; font-weight:bold; }
+.asset-row { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:11px; color:var(--mid); }
+.asset-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.sparkline-wrap { margin-left:auto; display:flex; align-items:flex-end; gap:2px; height:18px; }
+.spark-bar { width:5px; border-radius:1px 1px 0 0; transition:height 0.4s, background 0.4s; }
 
-#corr-top { flex:1; overflow:hidden; padding:10px 12px; }
+#corr-top { flex:1; overflow:hidden; padding:14px 16px; }
 .corr-row {
   display:flex; justify-content:space-between; align-items:center;
-  padding:3px 0; font-size:8px; color:var(--dim);
-  border-bottom:0.5px solid rgba(255,255,255,0.03);
+  padding:5px 0; font-size:10px; color:var(--mid);
+  border-bottom:0.5px solid rgba(255,255,255,0.05);
 }
-.corr-pair { color:var(--dim); font-size:7.5px; }
+.corr-pair { color:var(--mid); font-size:9.5px; }
 .corr-pos { color:var(--green); }
 .corr-neg { color:var(--red); }
-.corr-bar-bg { height:2px; background:rgba(255,255,255,0.06); margin-top:2px; }
+.corr-bar-bg { height:3px; background:rgba(255,255,255,0.08); margin-top:3px; }
 .corr-bar-fill { height:100%; border-radius:1px; transition:width 0.5s; }
 
 /* ── NODE SVG ─────────────────────────────────────────────────── */
@@ -206,7 +220,7 @@ body {
 
 /* ── NODE DOSSIER PANEL ───────────────────────────────────────── */
 #dossier-panel {
-  position:absolute; top:0; right:0; bottom:0; width:220px;
+  position:absolute; top:0; right:0; bottom:0; width:260px;
   background:rgba(0,0,0,0.92); border-left:0.5px solid var(--border);
   z-index:50; display:flex; flex-direction:column; overflow:hidden;
   transform:translateX(100%); transition:transform 0.35s cubic-bezier(0.16,1,0.3,1);
@@ -264,11 +278,11 @@ body {
 
 /* ── FOOTER ────────────────────────────────────────────────────── */
 #footer {
-  flex-shrink:0; height:22px; border-top:0.5px solid var(--border);
-  display:flex; align-items:center; padding:0 16px; gap:20px;
-  font-size:8px; color:var(--dim); letter-spacing:0.07em;
+  flex-shrink:0; height:28px; border-top:0.5px solid var(--border);
+  display:flex; align-items:center; padding:0 20px; gap:20px;
+  font-size:10px; color:var(--mid); letter-spacing:0.09em;
 }
-#footer span { color:var(--mid); }
+#footer span { color:var(--hi); font-weight:bold; }
 
 /* ── Fade overlay (page transitions) ───────────────────────────── */
 #fade-overlay {
@@ -297,10 +311,19 @@ body {
 
   <!-- TIMELINE -->
   <div id="timeline-col">
-    <div id="cursor-line"></div>
-    <div id="timeline-track"></div>
-    <div id="timeline-years"></div>
-    <!-- Crisis waypoints injected by JS -->
+    <!-- Fixed crisis nav at top -->
+    <div id="crisis-nav">
+      <div class="crisis-nav-label">JUMP TO</div>
+      <button class="crisis-btn" onclick="jumpTo(2008,10)">2008 · GFC</button>
+      <button class="crisis-btn" onclick="jumpTo(2020,4)">2020 · COVID</button>
+      <button class="crisis-btn" onclick="jumpTo(2022,6)">2022 · RATES</button>
+    </div>
+    <!-- Scrollable year strip -->
+    <div id="timeline-strip">
+      <div id="cursor-line"></div>
+      <div id="timeline-track"></div>
+      <div id="timeline-years"></div>
+    </div>
   </div>
 
   <!-- GRAPH -->
@@ -367,7 +390,7 @@ let ASSETS = [], CORR_DATA = {}, TIMELINE_KEYS = [];
 
 const LABELS  = ['CRUDE OIL','USD INDEX','GOLD','COPPER','SILVER','CORN','WHEAT','S&P 500'];
 const TICKERS = ['CL=F','DX-Y.NYB','GC=F','HG=F','SI=F','ZC=F','ZW=F','^GSPC'];
-const COLORS  = ['#BA7517','#378ADD','#EF9F27','#D85A30','#888780','#639922','#1D9E75','#7F77DD'];
+const COLORS  = ['#FF8C1A','#5BB0FF','#FFD93D','#FF6B3D','#D6D6D6','#9CE53F','#3BD9A6','#B8A4FF'];
 
 const CRISIS_YEARS = new Set([2001,2002,2008,2020,2022]);
 const WAYPOINTS = [
@@ -443,23 +466,9 @@ function buildTimeline() {
     div.className = 'year-tick' + (CRISIS_YEARS.has(y) ? ' crisis' : '');
     div.id = `tick-${y}`;
     div.textContent = y;
+    div.onclick = () => jumpTo(y, 6); // jump to mid-year
     el.appendChild(div);
   }
-
-  // Crisis waypoints
-  const col = document.getElementById('timeline-col');
-  WAYPOINTS.forEach(wp => {
-    const yOffset = (wp.year - 2000) * TICK_H;
-    const div = document.createElement('div');
-    div.className = 'waypoint';
-    div.style.top = `${yOffset + TICK_H/2}px`;
-    div.style.opacity = '0.55';
-    div.innerHTML = `
-      <div class="waypoint-ring pulsing" style="color:var(--red);border-color:rgba(255,51,51,0.5)">${wp.label}</div>
-      <div class="waypoint-tag">${wp.tag}</div>`;
-    div.onclick = () => jumpTo(wp.year, wp.month);
-    col.appendChild(div);
-  });
 }
 
 function updateTimeline(year) {
@@ -467,18 +476,11 @@ function updateTimeline(year) {
   const el = document.getElementById(`tick-${year}`);
   if (el) {
     el.classList.add('active');
-    const colH = document.getElementById('timeline-col').clientHeight;
+    const stripH = document.getElementById('timeline-strip').clientHeight;
     const offset = (year-2000)*TICK_H;
     document.getElementById('timeline-years').style.transform =
-      `translateY(${colH/2 - offset - TICK_H/2}px)`;
+      `translateY(${stripH/2 - offset - TICK_H/2}px)`;
   }
-  // Reposition waypoints
-  const colH2 = document.getElementById('timeline-col').clientHeight;
-  const transform = colH2/2 - (year-2000)*TICK_H - TICK_H/2;
-  document.querySelectorAll('.waypoint').forEach((wp, i) => {
-    const yOffset = (WAYPOINTS[i].year - 2000)*TICK_H;
-    wp.style.top = `${yOffset + transform + TICK_H/2}px`;
-  });
 }
 
 function jumpTo(year, month) {
@@ -578,23 +580,27 @@ function initGraph() {
     const r = parseInt(hex.slice(0,2),16),
           g = parseInt(hex.slice(2,4),16),
           b = parseInt(hex.slice(4,6),16);
+    // Bottom shadow tone — darken the asset color
+    const dark = `rgb(${Math.round(r*0.25)},${Math.round(g*0.25)},${Math.round(b*0.25)})`;
 
     const grad = defs.append('radialGradient')
       .attr('id',`ng-${i}`)
-      .attr('cx','35%').attr('cy','30%').attr('r','65%');
+      .attr('cx','32%').attr('cy','28%').attr('r','75%');
     grad.append('stop').attr('offset','0%')
-      .attr('stop-color','#ffffff').attr('stop-opacity','0.85');
-    grad.append('stop').attr('offset','35%')
-      .attr('stop-color',col).attr('stop-opacity','0.9');
-    grad.append('stop').attr('offset','75%')
-      .attr('stop-color',col).attr('stop-opacity','0.7');
+      .attr('stop-color','#ffffff').attr('stop-opacity','1');
+    grad.append('stop').attr('offset','18%')
+      .attr('stop-color','#ffffff').attr('stop-opacity','0.55');
+    grad.append('stop').attr('offset','45%')
+      .attr('stop-color',col).attr('stop-opacity','1');
+    grad.append('stop').attr('offset','80%')
+      .attr('stop-color',col).attr('stop-opacity','0.92');
     grad.append('stop').attr('offset','100%')
-      .attr('stop-color',`rgba(${r},${g},${b},0.3)`);
+      .attr('stop-color',dark).attr('stop-opacity','0.85');
 
     // Glow filter
     const f = defs.append('filter').attr('id',`gf-${i}`)
       .attr('x','-80%').attr('y','-80%').attr('width','260%').attr('height','260%');
-    f.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','5').attr('result','blur');
+    f.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','6').attr('result','blur');
     const m = f.append('feMerge');
     m.append('feMergeNode').attr('in','blur');
     m.append('feMergeNode').attr('in','SourceGraphic');
@@ -607,6 +613,14 @@ function initGraph() {
   const pm = posF.append('feMerge');
   pm.append('feMergeNode').attr('in','b');
   pm.append('feMergeNode').attr('in','SourceGraphic');
+
+  // Red glow filter for negative links
+  const negF = defs.append('filter').attr('id','link-glow-neg')
+    .attr('x','-40%').attr('y','-40%').attr('width','180%').attr('height','180%');
+  negF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','1.8').attr('result','b');
+  const nm = negF.append('feMerge');
+  nm.append('feMergeNode').attr('in','b');
+  nm.append('feMergeNode').attr('in','SourceGraphic');
 
   // ── LAYERS ──────────────────────────────────────────────────────
   const linkGroup = svg.append('g').attr('class','links');
@@ -630,18 +644,19 @@ function initGraph() {
     .attr('filter',d=>`url(#gf-${d.id})`);
 
   // Outer ring
-  nodeEls.append('circle').attr('class','node-ring').attr('r',13)
+  nodeEls.append('circle').attr('class','node-ring').attr('r',16)
     .attr('fill','none').attr('stroke',d=>d.color)
-    .attr('stroke-width',0.5).attr('opacity',0.25);
+    .attr('stroke-width',0.6).attr('opacity',0.35);
 
   // Inner glass sphere
-  nodeEls.append('circle').attr('r',10)
-    .attr('fill',d=>`url(#ng-${d.id})`).attr('opacity',0.95);
+  nodeEls.append('circle').attr('r',13)
+    .attr('fill',d=>`url(#ng-${d.id})`).attr('opacity',1)
+    .style('filter', d => `drop-shadow(0 0 6px ${d.color})`);
 
   // Labels
-  nodeEls.append('text').attr('class','node-label').attr('dy',-16)
+  nodeEls.append('text').attr('class','node-label').attr('dy',-22)
     .text(d=>d.label.split(' ').pop());
-  nodeEls.append('text').attr('class','node-sub').attr('dy',-7)
+  nodeEls.append('text').attr('class','node-sub').attr('dy',-12)
     .text(d=>d.ticker);
 
   // Click → open dossier (also dismisses the click hint)
@@ -655,12 +670,12 @@ function initGraph() {
   nodeEls
     .on('mouseenter', function() {
       const g = d3.select(this);
-      g.select('.node-ring').attr('opacity', 0.85).attr('stroke-width', 1.5);
-      g.select('.mid-glow').attr('opacity', 0.18);
+      g.select('.node-ring').attr('opacity', 0.9).attr('stroke-width', 1.8).attr('r', 19);
+      g.select('.mid-glow').attr('opacity', 0.22);
     })
     .on('mouseleave', function() {
       const g = d3.select(this);
-      g.select('.node-ring').attr('opacity', 0.25).attr('stroke-width', 0.5);
+      g.select('.node-ring').attr('opacity', 0.35).attr('stroke-width', 0.6).attr('r', 16);
       g.select('.mid-glow').attr('opacity', 0.07);
     });
 
@@ -785,7 +800,7 @@ function updateLinks(key) {
   linkEls.each(function(d) {
     const sel = d3.select(this);
     const abs = Math.abs(d.corr);
-    const visible = abs > 0.4;
+    const visible = abs > 0.35;
 
     if (!visible) {
       sel.attr('stroke','none').attr('stroke-width',0).attr('opacity',0);
@@ -794,25 +809,28 @@ function updateLinks(key) {
 
     if (d.corr > 0) {
       // Positive: glowing green animated dash — "data packets"
-      const dashLen = 12, gapLen = Math.max(4, 20*(1-abs));
+      const dashLen = 14, gapLen = Math.max(4, 22*(1-abs));
       const total = dashLen + gapLen;
-      const offset = -(animT * abs * 25) % total;
+      const offset = -(animT * abs * 28) % total;
       sel
         .attr('stroke','#39ff14')
-        .attr('stroke-width', abs*2.5)
-        .attr('opacity', abs*0.75)
+        .attr('stroke-width', abs*3.5)
+        .attr('opacity', abs*0.9)
         .attr('stroke-dasharray',`${dashLen},${gapLen}`)
         .attr('stroke-dashoffset', offset)
         .attr('filter','url(#link-glow-pos)');
     } else {
-      // Negative: sharp red jagged dashes — "fracturing repulsion"
+      // Negative: red animated short dashes — "fracturing tension"
+      const dashLen = 4, gapLen = 5;
+      const total = dashLen + gapLen;
+      const offset = -(animT * abs * 18) % total;
       sel
-        .attr('stroke','#ff3333')
-        .attr('stroke-width', abs*1.5)
-        .attr('opacity', abs*0.55)
-        .attr('stroke-dasharray','2,5')
-        .attr('stroke-dashoffset', 0)
-        .attr('filter','none');
+        .attr('stroke','#ff4d4d')
+        .attr('stroke-width', abs*2.8)
+        .attr('opacity', abs*0.85)
+        .attr('stroke-dasharray',`${dashLen},${gapLen}`)
+        .attr('stroke-dashoffset', offset)
+        .attr('filter','url(#link-glow-neg)');
     }
   });
 }
@@ -951,13 +969,15 @@ function refreshDossier(key) {
    MAIN UPDATE
 ══════════════════════════════════════════════════════════════════ */
 function update(monthIdx) {
-  const {year, str} = idxToDate(monthIdx);
+  const {year, month, str} = idxToDate(monthIdx);
   const key = nearestKey(str);
 
   // Persist for round-trip with globe page
   try { sessionStorage.setItem(SS_KEY_MONTH, String(monthIdx)); } catch(e) {}
 
-  document.getElementById('date-display').textContent = key;
+  // Human-readable date — "OCT 2008" instead of "2008-10"
+  const MONTHS_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  document.getElementById('date-display').textContent = `${MONTHS_ABBR[month]} ${year}`;
   updateTimeline(year);
   updateRegime(getRegime(key));
   updateLinks(key);
@@ -998,8 +1018,8 @@ function bindInteraction() {
   }, {passive:false});
 
   let isDrag=false, dragY0=0, dragIdx0=0;
-  const col = document.getElementById('timeline-col');
-  col.addEventListener('mousedown', e=>{ isDrag=true; dragY0=e.clientY; dragIdx0=currentMonthIdx; });
+  const strip = document.getElementById('timeline-strip');
+  strip.addEventListener('mousedown', e=>{ isDrag=true; dragY0=e.clientY; dragIdx0=currentMonthIdx; });
   window.addEventListener('mouseup', ()=>{ isDrag=false; });
   window.addEventListener('mousemove', e=>{
     if(!isDrag) return;
