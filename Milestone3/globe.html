@@ -89,15 +89,15 @@
 
   /* ── Back button + fade overlay ── */
   #back-btn {
-    position:fixed; top:8px; left:8px; z-index:1500;
-    padding:6px 14px; font-family:var(--mono); font-size:10px;
-    letter-spacing:.18em; color:var(--hi);
-    background:rgba(0,0,0,0.7); border:0.5px solid rgba(255,255,255,0.15);
-    cursor:pointer; transition:background 0.25s,border-color 0.25s,color 0.25s;
+    flex-shrink:0; height:34px;
+    padding:0 14px; font-family:var(--mono); font-size:10px;
+    letter-spacing:.18em; color:var(--mid);
+    background:rgba(0,0,0,0.5); border:none;
+    border-right:0.5px solid var(--border);
+    cursor:pointer; transition:background 0.2s, color 0.2s;
+    display:flex; align-items:center; gap:6px;
   }
-  #back-btn:hover {
-    background:rgba(57,255,20,0.1); border-color:rgba(57,255,20,0.5); color:var(--green);
-  }
+  #back-btn:hover { background:rgba(57,255,20,0.1); color:var(--green); }
   #fade-overlay {
     position:fixed; inset:0; z-index:2000;
     background:#000; opacity:1; pointer-events:none;
@@ -108,11 +108,18 @@
 </style>
 </head>
 <body>
-<button id="back-btn" onclick="leaveToIndex()">&lt; BACK TO GRAPH</button>
 <div id="fade-overlay"></div>
 
 <div id="root">
-  <div id="tabs"></div>
+
+<header class="top">
+  <div>
+    <div class="brand">&gt;_ <span style="color:var(--green)">CRASH</span>VIZ.<span style="color:var(--green)">GLOBE</span></div>
+    <div class="sub">GEOGRAPHIC DOSSIER · TOP PRODUCERS & CONSUMERS</div>
+  </div>
+</header>
+
+<div id="tabs"><button id="back-btn" onclick="leaveToIndex()">&lt; BACK TO GRAPH</button></div>
   <div id="body">
 
     <div id="globe-wrap">

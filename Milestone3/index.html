@@ -46,6 +46,70 @@ body {
   font-variant-numeric:tabular-nums;
 }
 #regime-label { font-size:11px; padding:4px 14px; border:0.5px solid; letter-spacing:0.16em; font-weight:bold; transition:color 0.6s,border-color 0.6s; }
+
+/* ── HELP BUTTON + POPOVER ─────────────────────────────────────── */
+#help-btn {
+  font-family:var(--mono); font-size:13px; font-weight:bold;
+  width:24px; height:24px; border-radius:50%;
+  background:transparent; border:0.5px solid rgba(255,255,255,0.3);
+  color:var(--mid); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background 0.2s, color 0.2s, border-color 0.2s;
+}
+#help-btn:hover { background:rgba(57,255,20,0.1); color:var(--green); border-color:rgba(57,255,20,0.6); }
+
+#help-popover {
+  position:absolute; top:54px; right:16px;
+  width:340px; padding:16px 18px;
+  background:rgba(0,0,0,0.96); border:0.5px solid rgba(57,255,20,0.4);
+  z-index:200; box-shadow:0 0 20px rgba(57,255,20,0.15);
+  font-size:11px; line-height:1.7; color:var(--mid); letter-spacing:0.03em;
+  opacity:0; pointer-events:none; transform:translateY(-6px);
+  transition:opacity 0.25s, transform 0.25s;
+}
+#help-popover.open { opacity:1; pointer-events:all; transform:translateY(0); }
+#help-popover h4 {
+  font-size:10px; color:var(--green); letter-spacing:0.18em;
+  margin-bottom:6px; margin-top:12px; font-weight:bold;
+}
+#help-popover h4:first-child { margin-top:0; }
+#help-popover .h-val { color:var(--hi); font-weight:bold; }
+
+/* Generic tooltip for crisis buttons */
+.crisis-btn { position:relative; }
+.crisis-btn .ttip {
+  position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%);
+  width:230px; padding:10px 12px;
+  background:rgba(0,0,0,0.96); border:0.5px solid rgba(255,51,51,0.5);
+  font-size:10px; line-height:1.6; color:var(--mid); letter-spacing:0.03em;
+  opacity:0; pointer-events:none; z-index:200;
+  transition:opacity 0.25s;
+  text-align:left; text-transform:none; font-weight:normal;
+  box-shadow:0 0 18px rgba(255,51,51,0.2);
+}
+.crisis-btn:hover .ttip { opacity:1; }
+.crisis-btn .ttip b { color:#ff6b6b; font-size:11px; }
+
+/* Generic small info icon */
+.info-i {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:13px; height:13px; border-radius:50%; font-size:9px;
+  background:rgba(255,255,255,0.08); color:var(--mid);
+  cursor:help; margin-left:5px; font-weight:bold;
+  transition:background 0.2s, color 0.2s;
+  position:relative;
+}
+.info-i:hover { background:rgba(57,255,20,0.18); color:var(--green); }
+.info-i .ttip {
+  position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+  width:200px; padding:8px 10px;
+  background:rgba(0,0,0,0.96); border:0.5px solid rgba(57,255,20,0.4);
+  font-size:10px; line-height:1.6; color:var(--mid); letter-spacing:0.03em;
+  opacity:0; pointer-events:none; z-index:200;
+  transition:opacity 0.25s;
+  text-align:left; font-weight:normal;
+}
+.info-i:hover .ttip { opacity:1; }
 .regime-stable { color:var(--green); border-color:rgba(57,255,20,0.4); }
 .regime-stress  { color:var(--orange); border-color:rgba(255,165,0,0.4); }
 .regime-crisis  { color:var(--red);    border-color:rgba(255,51,51,0.4); }
@@ -143,7 +207,7 @@ body {
 .year-tick.crisis.active::before { background:var(--red); opacity:0.6; }
 
 /* ── GRAPH ─────────────────────────────────────────────────────── */
-#graph-col { flex:1; position:relative; overflow:hidden; }
+#graph-col { flex:1; position:relative; overflow:hidden; user-select:none; -webkit-user-select:none; }
 #topo-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
 #graph-col::after {
   content:''; position:absolute; inset:0;
@@ -186,9 +250,9 @@ body {
 .corr-bar-fill { height:100%; border-radius:1px; transition:width 0.5s; }
 
 /* ── NODE SVG ─────────────────────────────────────────────────── */
-.node-label { font-family:var(--mono); font-size:9px; font-weight:bold; fill:rgba(255,255,255,0.85); text-anchor:middle; pointer-events:none; letter-spacing:0.06em; }
-.node-sub   { font-family:var(--mono); font-size:6.5px; fill:rgba(255,255,255,0.3); text-anchor:middle; pointer-events:none; }
-.node-group { cursor:pointer; }
+.node-label { font-family:var(--mono); font-size:11px; font-weight:bold; fill:rgba(255,255,255,0.95); text-anchor:middle; pointer-events:none; letter-spacing:0.08em; text-shadow:0 0 4px rgba(0,0,0,0.8); user-select:none; -webkit-user-select:none; }
+.node-group { cursor:pointer; user-select:none; -webkit-user-select:none; }
+#graph-svg, #graph-svg text { user-select:none; -webkit-user-select:none; }
 .node-group .node-ring, .node-group .mid-glow { transition:opacity 0.25s ease, stroke-width 0.25s ease; }
 .link { pointer-events:none; fill:none; }
 
@@ -305,6 +369,21 @@ body {
   <div class="hstat">WINDOW <b>63D CORR</b></div>
   <div id="date-display">────────</div>
   <div id="regime-label" class="regime-stable">LOADING</div>
+  <button id="help-btn" onclick="toggleHelp()" title="What does this mean?">?</button>
+</div>
+
+<!-- Help popover -->
+<div id="help-popover">
+  <h4>// CORRELATION</h4>
+  How prices of two assets move together over time. <span class="h-val">+1</span> means they move in lockstep, <span class="h-val">−1</span> means they move opposite, <span class="h-val">0</span> means independent. Calculated on a 63-day rolling window of daily returns.
+
+  <h4>// AVG COUPLING</h4>
+  An asset's mean <i>absolute</i> correlation to the other 7 assets. High coupling means this asset is moving with the rest of the market. Low coupling means it offers diversification.
+
+  <h4>// REGIME</h4>
+  <span class="h-val">STABLE</span>: assets move mostly independently. <br>
+  <span style="color:var(--orange);font-weight:bold">STRESS</span>: correlations are rising, market stress is building. <br>
+  <span style="color:var(--red);font-weight:bold">CRISIS</span>: assets are moving together, diversification breaks down.
 </div>
 
 <div id="main">
@@ -314,9 +393,15 @@ body {
     <!-- Fixed crisis nav at top -->
     <div id="crisis-nav">
       <div class="crisis-nav-label">JUMP TO</div>
-      <button class="crisis-btn" onclick="jumpTo(2008,10)">2008 · GFC</button>
-      <button class="crisis-btn" onclick="jumpTo(2020,4)">2020 · COVID</button>
-      <button class="crisis-btn" onclick="jumpTo(2022,6)">2022 · RATES</button>
+      <button class="crisis-btn" onclick="jumpTo(2008,10)">2008 · GFC
+        <span class="ttip"><b>Global Financial Crisis</b><br>September 2008: Lehman Brothers collapsed, triggering global mortgage and credit meltdown. Equities, commodities, and copper all fell together as correlations spiked toward +1.</span>
+      </button>
+      <button class="crisis-btn" onclick="jumpTo(2020,4)">2020 · COVID
+        <span class="ttip"><b>COVID-19 Pandemic Crash</b><br>March–April 2020: global lockdowns shut down economic activity. Oil futures briefly went negative, equities fell 34% in a month, gold rallied as the safe haven.</span>
+      </button>
+      <button class="crisis-btn" onclick="jumpTo(2022,6)">2022 · RATES
+        <span class="ttip"><b>Fed Rate Hike Shock</b><br>2022: Aggressive Federal Reserve rate hikes to fight 40-year inflation. Rare year where stocks AND bonds fell together. Commodities surged on Russia–Ukraine supply shock.</span>
+      </button>
     </div>
     <!-- Scrollable year strip -->
     <div id="timeline-strip">
@@ -364,11 +449,11 @@ body {
   <!-- RIGHT PANEL -->
   <div id="right-panel">
     <div class="rp-section">
-      <div class="rp-label">// ASSETS · AVG COUPLING</div>
+      <div class="rp-label">// ASSETS · AVG COUPLING<span class="info-i">i<span class="ttip">Each asset's mean absolute correlation to the other 7. Bars show the last 8 monthly snapshots. Higher bars = stronger entanglement with the rest of the market.</span></span></div>
       <div id="asset-list"></div>
     </div>
     <div id="corr-top">
-      <div class="rp-label">// TOP CORRELATIONS</div>
+      <div class="rp-label">// TOP CORRELATIONS<span class="info-i">i<span class="ttip">The strongest asset pairs right now. Green = moving together, red = moving opposite. Sorted by magnitude.</span></span></div>
       <div id="corr-list"></div>
     </div>
   </div>
@@ -389,6 +474,7 @@ body {
 let ASSETS = [], CORR_DATA = {}, TIMELINE_KEYS = [];
 
 const LABELS  = ['CRUDE OIL','USD INDEX','GOLD','COPPER','SILVER','CORN','WHEAT','S&P 500'];
+const SHORT   = ['OIL','USD','GOLD','COPPER','SILVER','CORN','WHEAT','S&P 500'];
 const TICKERS = ['CL=F','DX-Y.NYB','GC=F','HG=F','SI=F','ZC=F','ZW=F','^GSPC'];
 const COLORS  = ['#FF8C1A','#5BB0FF','#FFD93D','#FF6B3D','#D6D6D6','#9CE53F','#3BD9A6','#B8A4FF'];
 
@@ -416,7 +502,8 @@ function getRegime(key) {
   let s=0,n=0;
   for (let i=0;i<8;i++) for (let j=i+1;j<8;j++) { s+=Math.abs(m[i][j]); n++; }
   const avg = s/n;
-  return avg>0.45 ? 'crisis' : avg>0.3 ? 'stress' : 'stable';
+  // Lowered thresholds (was 0.45 / 0.30) so brief shocks like COVID-Apr-2020 register
+  return avg>0.35 ? 'crisis' : avg>0.22 ? 'stress' : 'stable';
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -655,9 +742,7 @@ function initGraph() {
 
   // Labels
   nodeEls.append('text').attr('class','node-label').attr('dy',-22)
-    .text(d=>d.label.split(' ').pop());
-  nodeEls.append('text').attr('class','node-sub').attr('dy',-12)
-    .text(d=>d.ticker);
+    .text(d=>SHORT[d.id]);
 
   // Click → open dossier (also dismisses the click hint)
   nodeEls.on('click', (event, d) => {
@@ -681,6 +766,10 @@ function initGraph() {
 
   // Click on graph background → close dossier
   svg.on('click', () => closeDossier());
+
+  // Suppress browser default text-selection on double-click (caused a visual bug)
+  svg.on('dblclick', e => { e.preventDefault(); });
+  svg.on('mousedown', e => { if (e.detail > 1) e.preventDefault(); });
 
   // ── SIMULATION ──────────────────────────────────────────────────
   simulation = d3.forceSimulation(nodes)
@@ -747,7 +836,7 @@ function buildAssetList() {
     row.className = 'asset-row';
     row.innerHTML = `
       <span class="asset-dot" style="background:${n.color};box-shadow:0 0 4px ${n.color}"></span>
-      <span style="font-size:9px;color:var(--mid)">${n.label.split(' ').pop()}</span>
+      <span style="font-size:11px;color:var(--mid);font-weight:500">${SHORT[n.id]}</span>
       <div class="sparkline-wrap" id="spark-${n.id}">
         ${Array(8).fill(0).map((_,k)=>
           `<div class="spark-bar" id="sb-${n.id}-${k}" style="height:4px;background:${n.color};opacity:0.3"></div>`
@@ -854,7 +943,7 @@ function updateCorrList(key) {
     const barCol = p.c>0 ? '#39ff14' : '#ff3333';
     row.innerHTML=`
       <div style="flex:1">
-        <div class="corr-pair">${LABELS[p.i].split(' ').pop()} × ${LABELS[p.j].split(' ').pop()}</div>
+        <div class="corr-pair">${SHORT[p.i]} × ${SHORT[p.j]}</div>
         <div class="corr-bar-bg"><div class="corr-bar-fill" style="width:${barW}%;background:${barCol};opacity:0.6"></div></div>
       </div>
       <span class="${cls}" style="font-size:9px;margin-left:6px">${p.c>0?'+':''}${p.c.toFixed(2)}</span>`;
@@ -928,7 +1017,7 @@ function openDossier(node) {
     row.className = 'd-corr-row';
     row.innerHTML = `
       <div class="d-corr-dot" style="background:${COLORS[j]}"></div>
-      <div class="d-corr-name">${LABELS[j].split(' ').pop()}</div>
+      <div class="d-corr-name">${SHORT[j]}</div>
       <div class="d-corr-bar-bg">
         <div class="d-corr-bar-fill" style="width:${barW}%;background:${col};opacity:0.7"></div>
       </div>
@@ -939,9 +1028,9 @@ function openDossier(node) {
   // Regime context text
   const regime = getRegime(key);
   const regimeTexts = {
-    crisis: `${node.label.split(' ').pop()} is in high systemic coupling territory. Avg correlation ${aval.toFixed(2)} — consistent with crisis clustering where diversification benefits collapse.`,
-    stress: `${node.label.split(' ').pop()} shows elevated coupling (${aval.toFixed(2)}). Market stress is compressing cross-asset correlations above baseline levels.`,
-    stable: `${node.label.split(' ').pop()} avg coupling at ${aval.toFixed(2)} — within normal regime. Correlation structure is diffuse and diversification is effective.`,
+    crisis: `${SHORT[node.id]} is in high systemic coupling territory. Avg correlation ${aval.toFixed(2)}, consistent with crisis clustering where diversification benefits collapse.`,
+    stress: `${SHORT[node.id]} shows elevated coupling (${aval.toFixed(2)}). Market stress is compressing cross-asset correlations above baseline levels.`,
+    stable: `${SHORT[node.id]} avg coupling at ${aval.toFixed(2)}, within normal regime. Correlation structure is diffuse and diversification is effective.`,
   };
   document.getElementById('dossier-regime-text').textContent = regimeTexts[regime];
 
@@ -1028,6 +1117,20 @@ function bindInteraction() {
     update(currentMonthIdx);
   });
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   HELP POPOVER
+══════════════════════════════════════════════════════════════════ */
+function toggleHelp() {
+  document.getElementById('help-popover').classList.toggle('open');
+}
+// Click anywhere else closes it
+document.addEventListener('click', e => {
+  const pop = document.getElementById('help-popover');
+  const btn = document.getElementById('help-btn');
+  if (!pop || !btn) return;
+  if (!pop.contains(e.target) && e.target !== btn) pop.classList.remove('open');
+});
 
 /* ═══════════════════════════════════════════════════════════════
    PAGE TRANSITIONS + STATE PERSISTENCE
