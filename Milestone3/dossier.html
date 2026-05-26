@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASSET DOSSIER // MARKETGRAPH</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+/* ════════════════════════════════════════════════════════════
+   RESET + VARIABLES
+════════════════════════════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --bg:     #000;
+  --border: rgba(255,255,255,0.07);
+  --dim:    rgba(255,255,255,0.22);
+  --mid:    rgba(255,255,255,0.55);
+  --hi:     rgba(255,255,255,0.90);
+  --green:  #39ff14;
+  --red:    #ff3333;
+  --orange: #ffa500;
+  --blue:   #5BB0FF;
+  --mono:   'Courier New','Lucida Console',monospace;
+}
+
+html, body {
+  width:100%; height:100%;
+  background:var(--bg); color:var(--hi);
+  font-family:var(--mono); font-size:13px;
+  overflow:hidden; letter-spacing:0.03em;
+}
+
+/* ── SCANLINES ── */
+.scanlines {
+  position:fixed; inset:0; z-index:90; pointer-events:none;
+  background:repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.045) 2px, rgba(0,0,0,0.045) 4px
+  );
+}
+
+/* ── FADE OVERLAY ── */
+#fade-overlay {
+  position:fixed; inset:0; z-index:200;
+  background:#000; opacity:1; pointer-events:none;
+  transition:opacity 0.7s ease;
+}
+#fade-overlay.gone   { opacity:0; }
+#fade-overlay.active { opacity:1; pointer-events:all; }
+
+/* ── LOADING SCREEN ── */
+#loading {
+  position:fixed; inset:0; z-index:150;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  background:#000; gap:16px;
+  transition:opacity 0.5s ease;
+}
+#loading.hidden { opacity:0; pointer-events:none; }
+#loading-label  { font-size:8px; letter-spacing:0.3em; color:var(--dim); }
+#loading-bar-bg { width:180px; height:1px; background:rgba(255,255,255,0.07); }
+#loading-bar    { height:1px; background:var(--green); animation:loadPulse 1.5s ease-in-out infinite; }
+@keyframes loadPulse { 0%,100%{width:0%} 50%{width:80%} }
+
+/* ════════════════════════════════════════════════════════════
+   APP GRID
+════════════════════════════════════════════════════════════ */
+#app {
+  display:grid;
+  grid-template-rows:48px 1fr;
+  height:100vh; overflow:hidden;
+  opacity:0; transition:opacity 0.5s ease;
+}
+
+/* ════════════════════════════════════════════════════════════
+   HEADER
+════════════════════════════════════════════════════════════ */
+#header {
+  display:flex; align-items:center;
+  padding:0 18px; gap:16px;
+  border-bottom:0.5px solid var(--border);
+  background:rgba(0,0,0,0.96);
+  z-index:10; flex-shrink:0; position:relative;
+}
+
+#back-btn {
+  font-family:var(--mono); font-size:10px;
+  letter-spacing:0.18em; color:var(--dim);
+  background:transparent;
+  border:0.5px solid rgba(255,255,255,0.14);
+  padding:5px 12px; cursor:pointer; flex-shrink:0;
+  transition:color 0.25s, border-color 0.25s, background 0.25s;
+  white-space:nowrap;
+}
+#back-btn:hover {
+  color:var(--green); border-color:rgba(57,255,20,0.45);
+  background:rgba(57,255,20,0.05);
+}
+
+.h-sep {
+  width:0.5px; height:20px;
+  background:rgba(255,255,255,0.1); flex-shrink:0;
+}
+
+#h-asset { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+#h-dot   { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+#h-name  { font-size:14px; font-weight:bold; letter-spacing:0.12em; }
+#h-ticker{ font-size:10px; color:var(--dim); letter-spacing:0.12em; padding-top:1px; }
+
+#h-frozen       { flex:1; text-align:center; }
+#h-frozen-label { font-size:10px; letter-spacing:0.22em; color:var(--mid); display:block; margin-bottom:3px; }
+#h-frozen-date  {
+  font-size:20px; font-weight:bold; letter-spacing:0.14em;
+  display:block; font-variant-numeric:tabular-nums;
+}
+
+#h-regime {
+  font-size:10px; padding:5px 14px;
+  border:0.5px solid; letter-spacing:0.18em;
+  font-weight:bold; flex-shrink:0;
+  transition:color 0.6s, border-color 0.6s;
+}
+.regime-stable { color:var(--green);  border-color:rgba(57,255,20,0.4) !important; }
+.regime-stress { color:var(--orange); border-color:rgba(255,165,0,0.4) !important; }
+.regime-crisis { color:var(--red);    border-color:rgba(255,51,51,0.4)  !important; }
+
+#regime-line {
+  position:absolute; bottom:0; left:0; right:0;
+  height:1px; transition:background 0.7s;
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONTENT GRID
+════════════════════════════════════════════════════════════ */
+#content {
+  display:grid;
+  grid-template-rows:59% 41%;
+  overflow:hidden;
+}
+
+/* ── TOP ROW ── */
+#top-row {
+  display:grid;
+  grid-template-columns:63% 37%;
+  border-bottom:0.5px solid var(--border);
+  overflow:hidden; position:relative;
+}
+
+/* Ghost year watermark */
+#ghost-year {
+  position:absolute;
+  font-size:min(26vw,260px); font-weight:900;
+  color:rgba(255,255,255,0.016);
+  left:1%; top:50%; transform:translateY(-52%);
+  pointer-events:none; user-select:none;
+  letter-spacing:-0.06em; z-index:0;
+}
+
+/* ════════════════════════════════════════════════════════════
+   CHART PANEL
+════════════════════════════════════════════════════════════ */
+#chart-panel {
+  display:flex; flex-direction:column;
+  border-right:0.5px solid var(--border);
+  overflow:hidden; position:relative; z-index:1;
+}
+
+#chart-controls {
+  display:flex; align-items:center;
+  gap:10px; padding:5px 12px;
+  border-bottom:0.5px solid var(--border);
+  flex-shrink:0; background:rgba(0,0,0,0.7);
+  flex-wrap:nowrap; overflow:hidden;
+}
+.ctrl-label {
+  font-size:9px; color:var(--mid); letter-spacing:0.15em;
+  white-space:nowrap; flex-shrink:0;
+}
+.toggle-group { display:flex; }
+.tgl-btn {
+  font-size:10px; letter-spacing:0.08em; padding:4px 10px;
+  border:0.5px solid rgba(255,255,255,0.13);
+  background:transparent; color:var(--dim);
+  cursor:pointer; font-family:var(--mono);
+  transition:all 0.2s; white-space:nowrap;
+}
+.tgl-btn:not(:first-child) { border-left:none; }
+.tgl-btn.active {
+  color:var(--green); border-color:rgba(57,255,20,0.5);
+  background:rgba(57,255,20,0.07);
+}
+.tgl-btn:hover:not(.active) { color:var(--mid); }
+
+.vol-selector { display:flex; gap:5px; align-items:center; }
+.vol-btn {
+  font-size:10px; letter-spacing:0.08em; padding:3px 9px;
+  border:0.5px solid rgba(255,255,255,0.12);
+  color:var(--dim); cursor:pointer; transition:all 0.2s;
+}
+.vol-btn.active {
+  color:var(--green); border-color:rgba(57,255,20,0.5);
+  background:rgba(57,255,20,0.07);
+}
+.vol-btn:hover:not(.active) { color:var(--mid); }
+
+#reset-zoom-btn {
+  display:none; font-size:10px; letter-spacing:0.1em;
+  padding:3px 10px;
+  border:0.5px solid rgba(255,165,0,0.5);
+  background:rgba(255,165,0,0.06);
+  color:var(--orange); cursor:pointer;
+  font-family:var(--mono); transition:all 0.2s;
+}
+#reset-zoom-btn:hover { background:rgba(255,165,0,0.12); }
+
+#overlay-status {
+  font-size:9px; color:rgba(255,255,255,0.35);
+  letter-spacing:0.06em;
+  white-space:nowrap;
+}
+#overlay-status.active-overlays { color:rgba(57,255,20,0.5); }
+
+
+#chart-wrap { flex:1; position:relative; overflow:hidden; }
+#chart-svg  { width:100%; height:100%; }
+
+#overlay-group {
+  margin-left:auto;
+  display:flex; flex-direction:column;
+  align-items:flex-end; gap:3px; flex-shrink:0;
+}
+#mode-badge {
+  font-size:8.5px; letter-spacing:0.1em;
+  color:rgba(255,255,255,0.4);
+  border:0.5px solid rgba(255,255,255,0.1);
+  padding:2px 7px;
+  pointer-events:none;
+}
+
+#chart-tooltip {
+  position:absolute; display:none;
+  background:rgba(0,0,0,0.94);
+  border:0.5px solid rgba(255,255,255,0.14);
+  padding:7px 11px; font-size:9px;
+  letter-spacing:0.05em; pointer-events:none;
+  z-index:50; white-space:nowrap;
+}
+.tt-date { color:var(--dim); font-size:7px; display:block; margin-bottom:2px; }
+.tt-val  { color:var(--hi);  font-size:12px; font-weight:bold; display:block; }
+
+/* ════════════════════════════════════════════════════════════
+   ASSET CARD
+════════════════════════════════════════════════════════════ */
+#asset-card {
+  display:flex; flex-direction:column;
+  padding:15px 16px; overflow:hidden; gap:0;
+}
+
+.card-block {
+  padding-bottom:13px; margin-bottom:13px;
+  border-bottom:0.5px solid var(--border);
+  flex-shrink:0;
+}
+.card-block:last-child { border-bottom:none; padding-bottom:0; margin-bottom:0; flex:1; overflow:hidden; }
+
+.cb-label {
+  font-size:9px; letter-spacing:0.18em;
+  color:var(--mid); margin-bottom:8px; display:block;
+}
+
+/* Identity block */
+#ac-name   { font-size:17px; font-weight:bold; letter-spacing:0.1em; margin-bottom:3px; }
+#ac-ticker { font-size:8px; color:var(--dim); letter-spacing:0.15em; margin-bottom:10px; }
+#ac-price-row  { display:flex; align-items:baseline; gap:10px; }
+#ac-price      { font-size:24px; font-weight:bold; letter-spacing:0.05em; }
+#ac-norm-wrap  { display:flex; flex-direction:column; }
+#ac-norm-val   { font-size:11px; color:var(--mid); }
+#ac-norm-label { font-size:9px; color:rgba(255,255,255,0.35); letter-spacing:0.08em; }
+
+/* Coupling */
+#coupling-num   { font-size:17px; font-weight:bold; margin-bottom:6px; }
+#coupling-track { height:3px; background:rgba(255,255,255,0.07); position:relative; margin-bottom:4px; }
+#coupling-fill  { height:100%; position:absolute; left:0; top:0; transition:width 0.7s ease; }
+.c-axis { display:flex; justify-content:space-between; font-size:9px; color:rgba(255,255,255,0.35); }
+
+/* Gauge */
+#gauge-track {
+  height:5px; margin:12px 0 6px;
+  background:linear-gradient(90deg,
+    rgba(0,191,255,0.65) 0%,
+    rgba(255,255,255,0.04) 50%,
+    rgba(255,51,51,0.65) 100%
+  );
+  position:relative;
+}
+#gauge-center-mark {
+  position:absolute; top:-4px; bottom:-4px;
+  left:50%; width:0.5px; background:rgba(255,255,255,0.15);
+}
+#gauge-needle {
+  position:absolute; top:50%;
+  transform:translate(-50%,-50%);
+  width:10px; height:10px;
+  clip-path:polygon(50% 0%,100% 100%,50% 68%,0% 100%);
+  background:var(--hi);
+  transition:left 0.9s cubic-bezier(0.16,1,0.3,1);
+}
+.gauge-axis { display:flex; justify-content:space-between; font-size:9px; color:var(--mid); }
+#gauge-readout {
+  font-size:11px; text-align:center; margin-top:5px; color:var(--mid);
+}
+
+#gauge-constituents {
+  display:flex; justify-content:space-between;
+  margin-top:7px; padding-top:7px;
+  border-top:0.5px solid var(--border);
+  font-size:9.5px;
+}
+.gc-item { display:flex; flex-direction:column; gap:4px; }
+.gc-label { font-size:10px; color:var(--mid); letter-spacing:0.1em; }
+.gc-val   { font-size:16px; font-weight:bold; }
+
+
+
+/* ════════════════════════════════════════════════════════════
+   BOTTOM ROW
+════════════════════════════════════════════════════════════ */
+#bottom-row {
+  display:grid;
+  grid-template-columns:21% 32% 47%;
+  overflow:hidden;
+}
+
+.b-panel {
+  border-right:0.5px solid var(--border);
+  padding:11px 13px;
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.b-panel:last-child { border-right:none; }
+
+.panel-label {
+  font-size:9.5px; letter-spacing:0.18em; color:var(--mid);
+  margin-bottom:10px; flex-shrink:0;
+}
+
+/* ── VOL PANEL ── */
+.vol-row {
+  display:flex; align-items:center;
+  gap:8px; padding:5px 0;
+  cursor:pointer; flex-shrink:0;
+  border-left:2px solid transparent;
+  padding-left:4px;
+  transition:border-color 0.2s;
+}
+.vol-row.selected { border-left-color:var(--green); }
+.vol-row-label {
+  font-size:10.5px; letter-spacing:0.08em; color:var(--mid);
+  width:40px; flex-shrink:0; transition:color 0.2s;
+}
+.vol-row.selected .vol-row-label { color:var(--green); }
+.vol-bar-bg  { flex:1; height:3px; background:rgba(255,255,255,0.06); position:relative; }
+.vol-bar-fill{ position:absolute; left:0; top:0; height:100%; transition:width 0.6s ease; }
+.vol-val     { font-size:12px; font-weight:bold; width:48px; text-align:right; flex-shrink:0; }
+.vol-row.selected .vol-val { color:var(--green) !important; }
+
+#vol-note {
+  font-size:9px; color:rgba(255,255,255,0.4);
+  line-height:1.9; margin-top:auto; padding-top:8px;
+  flex-shrink:0;
+}
+
+/* ── DRAWDOWN PANEL ── */
+.dd-block { margin-bottom:10px; flex-shrink:0; }
+.dd-top-row {
+  display:flex; align-items:baseline;
+  justify-content:space-between; margin-bottom:4px;
+}
+.dd-type-label { font-size:9.5px; letter-spacing:0.1em; color:var(--mid); }
+.dd-value      { font-size:17px; font-weight:bold; }
+.dd-bar-bg     { height:3px; background:rgba(255,255,255,0.06); position:relative; }
+.dd-bar-fill   { position:absolute; left:0; top:0; height:100%; transition:width 0.7s ease; }
+
+#dd-dates      { margin-top:8px; flex-shrink:0; }
+.dd-date-row   {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:3px 0; border-bottom:0.5px solid rgba(255,255,255,0.04);
+}
+.dd-date-key   { font-size:9.5px; color:var(--mid); letter-spacing:0.05em; }
+.dd-date-val   { font-size:10px; color:var(--hi); font-weight:bold; }
+
+#zoom-btn {
+  margin-top:auto; padding:8px 0; flex-shrink:0;
+  border:0.5px solid rgba(255,51,51,0.3);
+  background:transparent; color:rgba(255,51,51,0.75);
+  font-family:var(--mono); font-size:10px;
+  letter-spacing:0.15em; cursor:pointer;
+  transition:all 0.25s; text-align:center;
+}
+#zoom-btn:hover {
+  background:rgba(255,51,51,0.07);
+  color:var(--red); border-color:rgba(255,51,51,0.55);
+}
+#zoom-btn.zoomed {
+  background:rgba(255,51,51,0.07);
+  color:var(--red); border-color:rgba(255,51,51,0.55);
+}
+
+/* ── CORRELATION PANEL ── */
+#corr-list {
+  flex:1; overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,0.07) transparent;
+}
+#corr-list::-webkit-scrollbar { width:3px; }
+#corr-list::-webkit-scrollbar-track { background:transparent; }
+#corr-list::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.07); }
+
+.corr-row {
+  display:flex; align-items:center;
+  gap:7px; padding:5px 4px 5px 5px;
+  border-bottom:0.5px solid rgba(255,255,255,0.04);
+  cursor:pointer; transition:background 0.15s;
+  border-left:2px solid transparent;
+}
+.corr-row:hover { background:rgba(255,255,255,0.025); }
+.corr-row.overlaid { background:rgba(255,255,255,0.03); }
+.cr-dot  { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.cr-name { font-size:10.5px; color:var(--mid); width:68px; flex-shrink:0; white-space:nowrap; }
+.cr-bar-bg   { flex:1; height:3px; background:rgba(255,255,255,0.06); position:relative; }
+.cr-bar-fill { position:absolute; left:0; top:0; height:100%; transition:width 0.5s; }
+.cr-val  { font-size:11px; width:44px; text-align:right; flex-shrink:0; font-weight:bold; }
+
+
+
+/* ════════════════════════════════════════════════════════════
+   ENTRY ANIMATIONS
+════════════════════════════════════════════════════════════ */
+.panel-reveal {
+  opacity:0; transform:translateY(6px);
+  animation:panelIn 0.55s ease forwards;
+}
+@keyframes panelIn {
+  to { opacity:1; transform:translateY(0); }
+}
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div id="fade-overlay"></div>
+
+<div id="loading">
+  <div id="loading-label">LOADING DOSSIER_</div>
+  <div id="loading-bar-bg"><div id="loading-bar"></div></div>
+</div>
+
+<div id="app">
+  <!-- ══ HEADER ══ -->
+  <header id="header">
+    <button id="back-btn" onclick="leaveToIndex()">← BACK TO GRAPH</button>
+    <div class="h-sep"></div>
+    <div id="h-asset">
+      <div id="h-dot"></div>
+      <span id="h-name">──────</span>
+      <span id="h-ticker">────</span>
+    </div>
+    <div class="h-sep"></div>
+    <div id="h-frozen">
+      <span id="h-frozen-label">DOSSIER FROZEN AT</span>
+      <span id="h-frozen-date">── ────</span>
+    </div>
+    <div class="h-sep"></div>
+    <div id="h-regime">──────────</div>
+    <div id="regime-line"></div>
+  </header>
+
+  <!-- ══ CONTENT ══ -->
+  <div id="content">
+
+    <!-- ── TOP ROW ── -->
+    <div id="top-row">
+      <div id="ghost-year"></div>
+
+      <!-- PRICE CHART -->
+      <div id="chart-panel">
+        <div id="chart-controls">
+          <span class="ctrl-label">// PRICE</span>
+          <div class="toggle-group">
+            <button class="tgl-btn active" id="btn-raw"  onclick="setViewMode('raw')">RAW</button>
+            <button class="tgl-btn"        id="btn-norm" onclick="setViewMode('norm')">NORM</button>
+          </div>
+          <div class="h-sep"></div>
+          <span class="ctrl-label">// REGIMES</span>
+          <div class="toggle-group">
+            <button class="tgl-btn active" id="btn-reg-on"  onclick="setRegimes(true)">ON</button>
+            <button class="tgl-btn"        id="btn-reg-off" onclick="setRegimes(false)">OFF</button>
+          </div>
+
+          <button id="reset-zoom-btn" onclick="resetZoom()">↩ RESET ZOOM</button>
+          <div id="overlay-group">
+            <div id="overlay-status">CLICK CORRELATION ROW TO OVERLAY</div>
+            <div id="mode-badge">RAW · ACTUAL PRICE</div>
+          </div>
+        </div>
+        <div id="chart-wrap">
+          <svg id="chart-svg"></svg>
+          <div id="chart-tooltip">
+            <span class="tt-date" id="tt-date"></span>
+            <span class="tt-val"  id="tt-val"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ASSET CARD -->
+      <div id="asset-card">
+        <!-- Identity -->
+        <div class="card-block">
+          <div id="ac-name">──────</div>
+          <div id="ac-ticker">────</div>
+          <div id="ac-price-row">
+            <span id="ac-price">───</span>
+            <div id="ac-norm-wrap">
+              <span id="ac-norm-val"></span>
+              <span id="ac-norm-label">BASE-100</span>
+            </div>
+          </div>
+        </div>
+        <!-- Coupling -->
+        <div class="card-block">
+          <span class="cb-label">// AVG COUPLING AT FROZEN DATE</span>
+          <div id="coupling-num">─.──</div>
+          <div id="coupling-track"><div id="coupling-fill"></div></div>
+          <div class="c-axis"><span>ISOLATED</span><span>ENTANGLED</span></div>
+        </div>
+        <!-- Safe-haven gauge -->
+        <div class="card-block">
+          <span class="cb-label">// SAFE-HAVEN CHARACTER · corr(Gold) − corr(S&amp;P 500)</span>
+          <div id="gauge-track">
+            <div id="gauge-center-mark"></div>
+            <div id="gauge-needle"></div>
+          </div>
+          <div class="gauge-axis">
+            <span>◀ SAFE HAVEN</span>
+            <span>RISK ON ▶</span>
+          </div>
+          <div id="gauge-readout">─.──</div>
+          <div id="gauge-constituents"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── BOTTOM ROW ── -->
+    <div id="bottom-row">
+
+      <!-- VOL PANEL -->
+      <div class="b-panel">
+        <div class="panel-label">// VOLATILITY · ANNUALISED</div>
+        <div id="vol-rows"></div>
+        <div id="vol-note">SELECT WINDOW<br>TO HIGHLIGHT<br>MEASUREMENT PERIOD</div>
+      </div>
+
+      <!-- DRAWDOWN PANEL -->
+      <div class="b-panel">
+        <div class="panel-label">// DRAWDOWN</div>
+        <div id="dd-curr-block" class="dd-block">
+          <div class="dd-top-row">
+            <span class="dd-type-label">CURRENT FROM PEAK</span>
+          </div>
+          <div class="dd-value" id="dd-curr-val">─%</div>
+          <div class="dd-bar-bg">
+            <div class="dd-bar-fill" id="dd-curr-fill"
+              style="background:linear-gradient(90deg,rgba(255,51,51,0.9),rgba(255,51,51,0.35))">
+            </div>
+          </div>
+        </div>
+        <div id="dd-max-block" class="dd-block">
+          <div class="dd-top-row">
+            <span class="dd-type-label">WORST EVER TO DATE</span>
+          </div>
+          <div class="dd-value" id="dd-max-val">─%</div>
+          <div class="dd-bar-bg">
+            <div class="dd-bar-fill" id="dd-max-fill"
+              style="background:linear-gradient(90deg,rgba(160,0,0,0.9),rgba(160,0,0,0.35))">
+            </div>
+          </div>
+        </div>
+        <div id="dd-dates"></div>
+        <button id="zoom-btn" onclick="zoomToDrawdown()">ZOOM TO CRASH CORRIDOR ↗</button>
+      </div>
+
+      <!-- CORRELATION PANEL -->
+      <div class="b-panel">
+        <div class="panel-label">// CORRELATIONS AT FROZEN DATE</div>
+        <div id="corr-list"></div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CONSTANTS — kept in sync with index.html
+═══════════════════════════════════════════════════════════════ */
+const ASSET_COLS = ['Crude_Oil','US_Dollar_Index','Gold','Copper','Silver','Corn','Wheat','SP500'];
+const LABELS     = ['CRUDE OIL','USD INDEX','GOLD','COPPER','SILVER','CORN','WHEAT','S&P 500'];
+const SHORT      = ['OIL','USD','GOLD','COPPER','SILVER','CORN','WHEAT','S&P 500'];
+const TICKERS    = ['CL=F','DX-Y.NYB','GC=F','HG=F','SI=F','ZC=F','ZW=F','^GSPC'];
+const COLORS     = ['#FF8C1A','#5BB0FF','#FFD93D','#FF6B3D','#D6D6D6','#9CE53F','#3BD9A6','#B8A4FF'];
+const GLOBE_TO_IDX = {
+  crude_oil:0, usd_index:1, gold:2, copper:3,
+  silver:4,    corn:5,      wheat:6, sp500:7,
+};
+const MONTHS_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+const CRISIS_PERIODS = [
+  { start:'2001-03-01', end:'2002-10-31', label:'DOTCOM' },
+  { start:'2007-10-01', end:'2009-06-30', label:'GFC'    },
+  { start:'2020-02-01', end:'2020-06-30', label:'COVID'  },
+  { start:'2022-01-01', end:'2022-12-31', label:'RATE SHOCK' },
+];
+
+// Approximate calendar days for each trading-day window
+const VOL_CAL = { vol_30d:44, vol_63d:91, vol_252d:366 };
+
+const SS_MONTH = 'mg_currentMonth';
+const SS_ASSET = 'mg_lastAsset';
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════ */
+let assetIdx = 2;           // default: Gold
+let assetCol = 'Gold';
+let frozenKey = '2008-10';
+let frozenDate = null;      // Date — last day of frozen month
+
+let allSeries  = null;      // price_series.json  .series
+let corrData   = null;      // correlation_data.json .matrices
+let corrKeys   = null;      // sorted date key array
+let metrics    = null;      // dossier_timeseries entry for [assetCol][frozenKey]
+
+let viewMode    = 'raw';    // 'raw' | 'norm'
+let showRegimes = true;
+let selectedVol = 'vol_30d';
+let activeOverlays = new Set();
+let isZoomed = false;
+let origXDomain = null;
+
+// D3 references
+let svgEl, gMain, xSc, ySc;
+let chartData = [];         // price series up to frozenDate (main asset)
+const M = { top:20, right:18, bottom:30, left:58 };
+let cW = 0, cH = 0;
+
+/* ═══════════════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════════════ */
+async function boot() {
+  // 1. Read navigation state
+  const rawMonth = sessionStorage.getItem(SS_MONTH);
+  const rawAsset = sessionStorage.getItem(SS_ASSET);
+
+  if (rawAsset && GLOBE_TO_IDX.hasOwnProperty(rawAsset)) {
+    assetIdx = GLOBE_TO_IDX[rawAsset];
+    assetCol = ASSET_COLS[assetIdx];
+  }
+  if (rawMonth !== null) {
+    const n = parseInt(rawMonth, 10);
+    if (!isNaN(n) && n >= 0) {
+      const yr = 2000 + Math.floor(n / 12);
+      const mo = n % 12;
+      frozenKey  = `${yr}-${String(mo + 1).padStart(2,'0')}`;
+      frozenDate = new Date(yr, mo + 1, 0); // last day of month
+    }
+  }
+  if (!frozenDate) {
+    const [yr, mo] = frozenKey.split('-').map(Number);
+    frozenDate = new Date(yr, mo, 0);
+  }
+
+  // 2. Parallel fetch
+  let dosTS, priceS, corrJ;
+  try {
+    [dosTS, priceS, corrJ] = await Promise.all([
+      fetch('dossier_timeseries.json').then(r => { if(!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch('price_series.json').then(r => { if(!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch('correlation_data.json').then(r => { if(!r.ok) throw new Error(r.status); return r.json(); }),
+    ]);
+  } catch(e) {
+    document.getElementById('loading-label').textContent = 'DATA FILES NOT FOUND';
+    document.getElementById('loading-label').style.color = '#ff3333';
+    document.getElementById('loading-bar-bg').innerHTML =
+      `<div style="font-size:8px;color:rgba(255,51,51,0.6);letter-spacing:0.15em;margin-top:10px;text-align:center;">
+        Serve locally: python -m http.server<br>
+        Needs: dossier_timeseries.json · price_series.json · correlation_data.json
+      </div>`;
+    // Remove black overlay so error is visible
+    document.getElementById('fade-overlay').classList.add('gone');
+    return;
+  }
+
+  allSeries = priceS.series;
+  corrData  = corrJ.matrices;
+  corrKeys  = corrJ.dates.slice().sort();
+
+  // Find nearest available key
+  const avail = dosTS.dates;
+  let best = avail[0];
+  for (const k of avail) { if (k <= frozenKey) best = k; }
+  frozenKey = best;
+  metrics   = dosTS.timeseries[assetCol]?.[frozenKey] || null;
+
+  // Build chart data
+  const ts = frozenDate.getTime();
+  chartData = (allSeries[assetCol] || [])
+    .filter(d => d.price !== null || d.norm !== null)
+    .filter(d => new Date(d.date).getTime() <= ts);
+
+  // 3. Show app
+  document.getElementById('loading').classList.add('hidden');
+  const app = document.getElementById('app');
+  app.style.opacity = '1';
+
+  // 4. Render
+  renderHeader();
+  renderModeNote();
+  initChart();
+  drawChart();
+  renderAssetCard();
+  renderVolPanel();
+  renderDrawdownPanel();
+  renderCorrPanel();
+
+  // 5. Staggered panel animations
+  [
+    '#chart-panel','#asset-card',
+    '#vol-rows','#dd-curr-block','#dd-max-block','#dd-dates','#corr-list'
+  ].forEach((sel,i) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    el.style.animationDelay = `${i * 60}ms`;
+    el.classList.add('panel-reveal');
+  });
+
+  // 6. Page fade-in
+  setTimeout(() => document.getElementById('fade-overlay').classList.add('gone'), 80);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════ */
+function nearestCorrKey(k) {
+  let b = corrKeys[0];
+  for (const ck of corrKeys) { if (ck <= k) b = ck; }
+  return b;
+}
+
+function getRegime(key) {
+  const m = corrData[key]; if (!m) return 'stable';
+  let s=0, n=0;
+  for (let i=0;i<8;i++) for (let j=i+1;j<8;j++) { s+=Math.abs(m[i][j]); n++; }
+  const avg = s/n;
+  return avg>0.35 ? 'crisis' : avg>0.22 ? 'stress' : 'stable';
+}
+
+function fmtPrice(v) {
+  if (v===null||v===undefined) return '—';
+  if (v>=10000) return v.toFixed(0);
+  if (v>=1000)  return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+function fmtDate(s) {
+  // "2008-10-23" → "23 OCT 2008"
+  if (!s) return '—';
+  const d = new Date(s + 'T12:00:00');
+  return `${d.getDate()} ${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function fmtKey(k) {
+  // "2008-10" → "OCT 2008"
+  const [yr, mo] = k.split('-');
+  return `${MONTHS_ABBR[parseInt(mo)-1]} ${yr}`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER: HEADER
+═══════════════════════════════════════════════════════════════ */
+function renderModeNote() {
+  const badge = document.getElementById('mode-badge');
+  if (badge) badge.textContent = 'RAW · ACTUAL PRICE';
+}
+
+function renderHeader() {
+  const col = COLORS[assetIdx];
+
+  // Dot
+  const dot = document.getElementById('h-dot');
+  dot.style.background  = col;
+  dot.style.boxShadow   = `0 0 9px ${col}`;
+
+  // Name + ticker
+  const nameEl = document.getElementById('h-name');
+  nameEl.textContent = LABELS[assetIdx];
+  nameEl.style.color = col;
+  document.getElementById('h-ticker').textContent = TICKERS[assetIdx];
+
+  // Frozen date
+  const dateEl = document.getElementById('h-frozen-date');
+  dateEl.textContent  = fmtKey(frozenKey);
+  dateEl.style.color  = col;
+  dateEl.style.textShadow = `0 0 14px ${col}50`;
+
+  // Regime badge + accent line
+  const ck = nearestCorrKey(frozenKey);
+  const regime = getRegime(ck);
+  const regEl  = document.getElementById('h-regime');
+  const lineEl = document.getElementById('regime-line');
+  regEl.className = regime === 'crisis' ? 'regime-crisis'
+                  : regime === 'stress' ? 'regime-stress'
+                  : 'regime-stable';
+  if (regime==='crisis') {
+    regEl.textContent = 'SYSTEMIC SHOCK';
+    lineEl.style.background = 'linear-gradient(90deg,transparent,rgba(255,51,51,0.35),transparent)';
+  } else if (regime==='stress') {
+    regEl.textContent = 'ELEVATED STRESS';
+    lineEl.style.background = 'linear-gradient(90deg,transparent,rgba(255,165,0,0.35),transparent)';
+  } else {
+    regEl.textContent = 'STABLE';
+    lineEl.style.background = 'linear-gradient(90deg,transparent,rgba(57,255,20,0.25),transparent)';
+  }
+
+  // Ghost year
+  document.getElementById('ghost-year').textContent = frozenKey.split('-')[0];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHART: INIT (scales, svg structure — called once)
+═══════════════════════════════════════════════════════════════ */
+function initChart() {
+  const wrap = document.getElementById('chart-wrap');
+  const rect = wrap.getBoundingClientRect();
+  cW = rect.width  - M.left - M.right;
+  cH = rect.height - M.top  - M.bottom;
+
+  d3.select('#chart-svg').selectAll('*').remove();
+  svgEl = d3.select('#chart-svg');
+
+  // Clip path
+  svgEl.append('defs')
+    .append('clipPath').attr('id','chart-clip')
+    .append('rect').attr('width', cW).attr('height', cH);
+
+  // Void fade gradient
+  const vg = svgEl.select('defs').append('linearGradient')
+    .attr('id','void-fade').attr('x1','0%').attr('x2','100%');
+  vg.append('stop').attr('offset','0%')
+    .attr('stop-color','#000').attr('stop-opacity',0);
+  vg.append('stop').attr('offset','100%')
+    .attr('stop-color','#000').attr('stop-opacity',1);
+
+  gMain = svgEl.append('g').attr('transform',`translate(${M.left},${M.top})`);
+
+  // Time scale: data start → 6 months past frozen date (for void visual)
+  const xEnd = new Date(frozenDate);
+  xEnd.setMonth(xEnd.getMonth() + 7);
+
+  xSc = d3.scaleTime()
+    .domain([new Date(chartData[0]?.date || '2000-08-30'), xEnd])
+    .range([0, cW]);
+
+  origXDomain = [...xSc.domain()];
+  ySc = d3.scaleLinear().range([cH, 0]);
+  recomputeY();
+}
+
+function recomputeY() {
+  const data = isZoomed ? chartData.filter(d => {
+    const t = new Date(d.date).getTime();
+    const [d0, d1] = xSc.domain();
+    return t >= d0.getTime() && t <= d1.getTime();
+  }) : chartData;
+
+  const vals = data.map(d => viewMode==='raw' ? d.price : d.norm).filter(v=>v!==null);
+
+  // Include overlay norm values in y-domain
+  activeOverlays.forEach(col => {
+    const od = allSeries[col]?.filter(d => new Date(d.date).getTime() <= frozenDate.getTime()) || [];
+    od.forEach(d => { if (d.norm!==null) vals.push(d.norm); });
+  });
+
+  if (!vals.length) return;
+  const [mn, mx] = d3.extent(vals);
+  const pad = (mx - mn) * 0.09;
+  ySc.domain([mn - pad, mx + pad]);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHART: DRAW (full redraw — clear + rebuild)
+═══════════════════════════════════════════════════════════════ */
+function drawChart() {
+  gMain.selectAll('*').remove();
+
+  const assetColor = COLORS[assetIdx];
+  const frozenX    = xSc(frozenDate);
+
+  // ── Subtle horizontal grid ──
+  gMain.append('g').attr('class','y-grid')
+    .selectAll('line').data(ySc.ticks(5)).join('line')
+      .attr('x1',0).attr('x2', cW)
+      .attr('y1',d=>ySc(d)).attr('y2',d=>ySc(d))
+      .attr('stroke','rgba(255,255,255,0.08)')
+      .attr('stroke-width',0.5);
+
+  // ── Crisis shading ──
+  if (showRegimes) {
+    const crG = gMain.append('g');
+    CRISIS_PERIODS.forEach(p => {
+      const px1 = xSc(new Date(p.start));
+      const px2 = Math.min(xSc(new Date(p.end)), frozenX);
+      const cx1 = Math.max(px1, 0);
+      if (px2 <= cx1) return;
+      crG.append('rect')
+        .attr('x',cx1).attr('y',0)
+        .attr('width',px2-cx1).attr('height',cH)
+        .attr('fill','rgba(220,40,40,0.18)');
+      // Left border line for the crisis zone
+      crG.append('line')
+        .attr('x1',cx1).attr('x2',cx1)
+        .attr('y1',0).attr('y2',cH)
+        .attr('stroke','rgba(255,60,60,0.5)')
+        .attr('stroke-width',0.8)
+        .attr('stroke-dasharray','3,2');
+      const labelX = (cx1 + Math.min(px2,frozenX)) / 2;
+      if (labelX>0 && labelX<frozenX) {
+        // Background pill behind label
+        const labelText = p.label;
+        const approxW = labelText.length * 5.5 + 12;
+        crG.append('rect')
+          .attr('x', labelX - approxW/2).attr('y', 3)
+          .attr('width', approxW).attr('height', 13)
+          .attr('fill','rgba(0,0,0,0.55)').attr('rx',1);
+        crG.append('text')
+          .attr('x',labelX).attr('y',13)
+          .attr('text-anchor','middle')
+          .attr('fill','rgba(255,110,110,0.95)')
+          .attr('font-size','9px').attr('letter-spacing','0.12em')
+          .attr('font-weight','bold')
+          .attr('font-family','Courier New,monospace')
+          .text(p.label);
+      }
+    });
+  }
+
+  // Vol window highlight removed — at full chart zoom, 30/63-day windows
+  // are < 5px wide and invisible. Window dates shown in vol panel instead.
+
+  // ── VOID ──
+  const voidX = Math.max(frozenX, 0);
+  gMain.append('rect')
+    .attr('x',voidX).attr('y',0)
+    .attr('width',Math.max(cW-voidX,0)).attr('height',cH)
+    .attr('fill','#000');
+
+  // Fade gradient at frozen boundary
+  const fadeW = 36;
+  gMain.append('rect')
+    .attr('x',Math.max(frozenX-fadeW,0)).attr('y',0)
+    .attr('width',fadeW).attr('height',cH)
+    .attr('fill','url(#void-fade)');
+
+  // "UNLIVED FUTURE" text
+  if (frozenX < cW - 30) {
+    const voidCx = voidX + (cW - voidX)/2;
+    ['UNLIVED','FUTURE'].forEach((txt,i) => {
+      gMain.append('text')
+        .attr('x',voidCx).attr('y',cH/2 + (i-0.5)*16)
+        .attr('text-anchor','middle')
+        .attr('fill','rgba(255,255,255,0.04)')
+        .attr('font-size','9px').attr('letter-spacing','0.45em')
+        .attr('font-family','Courier New,monospace')
+        .text(txt);
+    });
+  }
+
+  // ── Overlay lines (other assets, always in norm) ──
+  activeOverlays.forEach(col => {
+    const oIdx   = ASSET_COLS.indexOf(col);
+    if (oIdx < 0) return;
+    const oColor = COLORS[oIdx];
+    const oData  = (allSeries[col] || []).filter(d =>
+      d.norm !== null && new Date(d.date).getTime() <= frozenDate.getTime()
+    );
+    if (!oData.length) return;
+
+    const oLine = d3.line()
+      .x(d => xSc(new Date(d.date)))
+      .y(d => ySc(d.norm))
+      .defined(d => d.norm !== null);
+
+    gMain.append('path').datum(oData)
+      .attr('d', oLine)
+      .attr('stroke', oColor).attr('stroke-width', 1.2)
+      .attr('fill','none').attr('opacity', 0.5)
+      .attr('stroke-dasharray','4,3');
+
+    // Label at frozen end
+    const last = oData[oData.length-1];
+    if (last) {
+      gMain.append('text')
+        .attr('x', xSc(new Date(last.date)) - 4)
+        .attr('y', ySc(last.norm) - 5)
+        .attr('fill', oColor).attr('opacity',0.7)
+        .attr('font-size','7px').attr('text-anchor','end')
+        .attr('font-family','Courier New,monospace')
+        .attr('letter-spacing','0.06em')
+        .text(SHORT[oIdx]);
+    }
+  });
+
+  // ── Main line: glow pass + sharp pass ──
+  const yAccessor = d => viewMode==='raw' ? d.price : d.norm;
+  const mainLine  = d3.line()
+    .x(d => xSc(new Date(d.date)))
+    .y(d => ySc(yAccessor(d)))
+    .defined(d => yAccessor(d) !== null);
+
+  // Glow (blurred, wide stroke)
+  gMain.append('path').datum(chartData)
+    .attr('d', mainLine)
+    .attr('stroke', assetColor).attr('stroke-width', 5)
+    .attr('fill','none').attr('opacity',0.09)
+    .style('filter','blur(5px)');
+
+  // Crisp line
+  gMain.append('path').datum(chartData)
+    .attr('d', mainLine)
+    .attr('stroke', assetColor).attr('stroke-width', 1.5)
+    .attr('fill','none').attr('opacity', 0.88);
+
+  // ── Frozen vertical line ──
+  gMain.append('line')
+    .attr('x1',frozenX).attr('x2',frozenX)
+    .attr('y1',0).attr('y2',cH)
+    .attr('stroke',assetColor).attr('stroke-width',0.8)
+    .attr('stroke-dasharray','5,4').attr('opacity',0.65);
+
+  // Frozen date highlighted on x-axis (no floating label)
+  if (frozenX >= 0 && frozenX <= cW) {
+    // Taller coloured tick at the frozen date
+    gMain.append('line')
+      .attr('x1', frozenX).attr('x2', frozenX)
+      .attr('y1', cH).attr('y2', cH + 9)
+      .attr('stroke', assetColor).attr('stroke-width', 2);
+    // Coloured bold date label directly on x-axis
+    gMain.append('text')
+      .attr('x', frozenX).attr('y', cH + 21)
+      .attr('text-anchor', 'middle')
+      .attr('fill', assetColor)
+      .attr('font-size', '10px').attr('font-weight', 'bold')
+      .attr('letter-spacing', '0.08em')
+      .attr('font-family', 'Courier New,monospace')
+      .text(fmtKey(frozenKey));
+  }
+
+  // ── X Axis ──
+  // Pick tick density based on actual visible span (avoids label overlap on long drawdowns)
+  const [xd0, xd1] = xSc.domain();
+  const spanYears = (xd1 - xd0) / (1000 * 60 * 60 * 24 * 365.25);
+  let xTickEvery, xFmt;
+  if (spanYears > 4)      { xTickEvery = d3.timeYear.every(Math.ceil(spanYears/6));  xFmt = d3.timeFormat('%Y'); }
+  else if (spanYears > 1) { xTickEvery = d3.timeMonth.every(6);  xFmt = d3.timeFormat('%b %Y'); }
+  else if (spanYears > 0.4){ xTickEvery = d3.timeMonth.every(2); xFmt = d3.timeFormat('%b %Y'); }
+  else                    { xTickEvery = d3.timeMonth.every(1);  xFmt = d3.timeFormat('%b %Y'); }
+
+  gMain.append('g').attr('transform',`translate(0,${cH})`)
+    .call(d3.axisBottom(xSc).ticks(xTickEvery).tickFormat(xFmt).tickSize(3))
+    .call(ax => {
+      ax.select('.domain').attr('stroke','rgba(255,255,255,0.35)');
+      ax.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.35)');
+      ax.selectAll('.tick text')
+        .attr('fill','rgba(255,255,255,0.70)')
+        .attr('font-size','10px')
+        .attr('font-family','Courier New,monospace')
+        .attr('letter-spacing','0.05em');
+    });
+
+  // ── Y Axis ──
+  gMain.append('g')
+    .call(d3.axisLeft(ySc).ticks(5)
+      .tickFormat(d => viewMode==='raw' ? fmtPrice(d) : d.toFixed(0))
+      .tickSize(3)
+    )
+    .call(ax => {
+      ax.select('.domain').attr('stroke','rgba(255,255,255,0.35)');
+      ax.selectAll('.tick line').attr('stroke','rgba(255,255,255,0.25)');
+      ax.selectAll('.tick text')
+        .attr('fill','rgba(255,255,255,0.70)')
+        .attr('font-size','10px')
+        .attr('font-family','Courier New,monospace');
+    });
+
+  // Chart label
+  const yr0 = new Date(chartData[0]?.date||'2000').getFullYear();
+  gMain.append('text')
+    .attr('x',0).attr('y',-6)
+    .attr('fill','rgba(255,255,255,0.13)')
+    .attr('font-size','7px').attr('letter-spacing','0.12em')
+    .attr('font-family','Courier New,monospace')
+    .text(`// PRICE HISTORY · ${yr0} → ${fmtKey(frozenKey)}`);
+
+  // ── Crosshair ──
+  const chG  = gMain.append('g').style('display','none');
+  const chVL = chG.append('line').attr('y1',0).attr('y2',cH)
+    .attr('stroke','rgba(255,255,255,0.22)').attr('stroke-width',0.5).attr('stroke-dasharray','3,3');
+  const chHL = chG.append('line').attr('x1',0).attr('x2',cW)
+    .attr('stroke','rgba(255,255,255,0.22)').attr('stroke-width',0.5).attr('stroke-dasharray','3,3');
+  const chDot = chG.append('circle').attr('r',3)
+    .attr('fill',assetColor).attr('stroke','#000').attr('stroke-width',1);
+
+  const bisect = d3.bisector(d => new Date(d.date)).left;
+
+  // Invisible capture rect (only over the lived area)
+  gMain.append('rect')
+    .attr('width',Math.max(frozenX,0)).attr('height',cH)
+    .attr('fill','none').attr('pointer-events','all')
+    .on('mousemove', function(event) {
+      const [mx] = d3.pointer(event);
+      const hoverDate = xSc.invert(mx);
+      const idx = bisect(chartData, hoverDate, 1);
+      const da = chartData[idx-1], db = chartData[idx];
+      const d = !db||(da&&hoverDate-new Date(da.date)<new Date(db.date)-hoverDate) ? da : db;
+      if (!d) return;
+
+      const val = viewMode==='raw' ? d.price : d.norm;
+      if (val===null) return;
+
+      const cx = xSc(new Date(d.date));
+      const cy = ySc(val);
+      chG.style('display',null);
+      chVL.attr('x1',cx).attr('x2',cx);
+      chHL.attr('y1',cy).attr('y2',cy);
+      chDot.attr('cx',cx).attr('cy',cy);
+
+      // Position tooltip
+      const tt = document.getElementById('chart-tooltip');
+      tt.style.display='block';
+      let tleft = cx + M.left + 14;
+      if (tleft > cW + M.left - 110) tleft = cx + M.left - 118;
+      tt.style.left = tleft+'px';
+      tt.style.top  = Math.max(cy + M.top - 36, 2)+'px';
+      tt.style.borderColor = assetColor + '50';
+      document.getElementById('tt-date').textContent = d.date;
+      document.getElementById('tt-val').textContent  =
+        viewMode==='raw' ? fmtPrice(val) : val.toFixed(2);
+      document.getElementById('tt-val').style.color = assetColor;
+    })
+    .on('mouseleave', () => {
+      chG.style('display','none');
+      document.getElementById('chart-tooltip').style.display='none';
+    });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER: ASSET CARD
+═══════════════════════════════════════════════════════════════ */
+function renderAssetCard() {
+  const col   = COLORS[assetIdx];
+  const ck    = nearestCorrKey(frozenKey);
+  const mat   = corrData[ck];
+  const regime = getRegime(ck);
+
+  // Identity
+  const nameEl = document.getElementById('ac-name');
+  nameEl.textContent = LABELS[assetIdx];
+  nameEl.style.color = col;
+  document.getElementById('ac-ticker').textContent = TICKERS[assetIdx];
+
+  if (metrics) {
+    const prEl = document.getElementById('ac-price');
+    prEl.textContent = metrics.price!==null ? fmtPrice(metrics.price) : '—';
+    prEl.style.color = col;
+    document.getElementById('ac-norm-val').textContent =
+      metrics.norm!==null ? metrics.norm.toFixed(1) : '—';
+  }
+
+  // Avg coupling
+  let coupling = 0;
+  if (mat) {
+    for (let j=0;j<8;j++) if (j!==assetIdx) coupling += Math.abs(mat[assetIdx][j]);
+    coupling /= 7;
+  }
+  const cCol = coupling>0.45 ? '#ff3333' : coupling>0.30 ? '#ffa500' : '#39ff14';
+  const cnEl = document.getElementById('coupling-num');
+  cnEl.textContent = coupling.toFixed(2);
+  cnEl.style.color = cCol;
+  document.getElementById('coupling-fill').style.width      = `${Math.min(coupling,1)*100}%`;
+  document.getElementById('coupling-fill').style.background = cCol;
+
+  // Safe-haven gauge: corr(asset,Gold) − corr(asset,SP500)
+  let score = 0;
+  if (mat) {
+    score = Math.max(-1, Math.min(1, mat[assetIdx][2] - mat[assetIdx][7]));
+  }
+  const gLeft = ((1 - score) / 2) * 100; // positive score = safe haven = LEFT
+  document.getElementById('gauge-needle').style.left = `${gLeft}%`;
+  const scoreEl = document.getElementById('gauge-readout');
+  scoreEl.textContent = `SCORE: ${score>=0?'+':''}${score.toFixed(2)}`;
+  scoreEl.style.color = score>0.2 ? '#5BB0FF' : score<-0.2 ? '#ff3333' : 'rgba(255,255,255,0.55)';
+
+  // Show constituent correlations
+  const corrGold = mat ? mat[assetIdx][2] : null;
+  const corrSP   = mat ? mat[assetIdx][7] : null;
+  const gcEl = document.getElementById('gauge-constituents');
+  if (gcEl) {
+    const fmt = v => v===null ? '—' : `${v>=0?'+':''}${v.toFixed(2)}`;
+    const colGold = corrGold>0 ? '#5BB0FF' : '#ff3333';
+    const colSP   = corrSP>0  ? '#ff3333' : '#5BB0FF';
+    gcEl.innerHTML = `
+      <div class="gc-item">
+        <span class="gc-label">CORR w/ GOLD</span>
+        <span class="gc-val" style="color:${colGold}">${fmt(corrGold)}</span>
+      </div>
+      <div class="gc-item" style="text-align:right">
+        <span class="gc-label">CORR w/ S&P 500</span>
+        <span class="gc-val" style="color:${colSP}">${fmt(corrSP)}</span>
+      </div>`;
+  }
+
+
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER: VOL PANEL
+═══════════════════════════════════════════════════════════════ */
+function renderVolPanel() {
+  const container = document.getElementById('vol-rows');
+  container.innerHTML = '';
+  if (!metrics) return;
+
+  const tradingDays = { vol_30d:30, vol_63d:63, vol_252d:252 };
+  const defs = [
+    { key:'vol_30d',  label:'30D'  },
+    { key:'vol_63d',  label:'63D'  },
+    { key:'vol_252d', label:'252D' },
+  ];
+  const maxV = Math.max(...defs.map(d => metrics[d.key]||0));
+
+  defs.forEach(({ key, label }) => {
+    const val  = metrics[key];
+    const pct  = val!==null ? (val*100).toFixed(1)+'%' : '—';
+    const barW = (val!==null && maxV>0) ? (val/maxV)*100 : 0;
+    const vc   = val>0.5 ? '#ff3333' : val>0.3 ? '#ffa500' : '#39ff14';
+    const isActive = key===selectedVol;
+
+    const row = document.createElement('div');
+    row.className = `vol-row${isActive?' selected':''}`;
+    row.dataset.w = key;
+    row.innerHTML = `
+      <span class="vol-row-label">${label}</span>
+      <div class="vol-bar-bg">
+        <div class="vol-bar-fill" style="width:${barW}%;background:${vc}"></div>
+      </div>
+      <span class="vol-val" style="color:${isActive?'#39ff14':vc}">${pct}</span>`;
+    row.addEventListener('click', () => selectVol(key));
+    container.appendChild(row);
+  });
+
+  // Show window coverage for selected vol
+  updateVolNote();
+}
+
+function updateVolNote() {
+  const noteEl = document.getElementById('vol-note');
+  if (!noteEl || !frozenDate) return;
+  const td = { vol_30d:30, vol_63d:63, vol_252d:252 }[selectedVol];
+  const label = selectedVol.replace('vol_','').toUpperCase();
+  // Approx calendar days: trading days × (365/252)
+  const calMs = td * (365/252) * 24*60*60*1000;
+  const winStart = new Date(frozenDate.getTime() - calMs);
+  const winStartStr = `${winStart.getDate()} ${MONTHS_ABBR[winStart.getMonth()]} ${winStart.getFullYear()}`;
+  const frozenStr   = `${frozenDate.getDate()} ${MONTHS_ABBR[frozenDate.getMonth()]} ${frozenDate.getFullYear()}`;
+  noteEl.innerHTML =
+    `<span style="color:var(--green);font-weight:bold">${label} WINDOW</span><br>` +
+    `${winStartStr}<br>→ ${frozenStr}<br>` +
+    `<span style="color:rgba(255,255,255,0.28);font-size:8.5px">Annualised std dev of log returns over this period</span>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER: DRAWDOWN PANEL
+═══════════════════════════════════════════════════════════════ */
+function renderDrawdownPanel() {
+  if (!metrics) return;
+
+  const dc = metrics.drawdown_current;
+  const dm = metrics.drawdown_max;
+
+  const currEl = document.getElementById('dd-curr-val');
+  currEl.textContent = dc!==null ? (dc*100).toFixed(1)+'%' : '—';
+  currEl.style.color = dc!==null && dc < -0.2 ? '#ff3333' : '#ffa500';
+  document.getElementById('dd-curr-fill').style.width =
+    dc!==null ? `${Math.abs(dc)*100}%` : '0%';
+
+  const maxEl = document.getElementById('dd-max-val');
+  maxEl.textContent = dm!==null ? (dm*100).toFixed(1)+'%' : '—';
+  maxEl.style.color = '#ff3333';
+  document.getElementById('dd-max-fill').style.width =
+    dm!==null ? `${Math.abs(dm)*100}%` : '0%';
+
+  // Dates
+  const datesEl = document.getElementById('dd-dates');
+  datesEl.innerHTML = '';
+  if (metrics.drawdown_peak_date) {
+    [
+      ['PEAK DATE',   metrics.drawdown_peak_date],
+      ['TROUGH DATE', metrics.drawdown_trough_date],
+    ].forEach(([label, val]) => {
+      datesEl.innerHTML += `
+        <div class="dd-date-row">
+          <span class="dd-date-key">${label}</span>
+          <span class="dd-date-val">${fmtDate(val)}</span>
+        </div>`;
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER: CORRELATION PANEL
+═══════════════════════════════════════════════════════════════ */
+function renderCorrPanel() {
+  const ck  = nearestCorrKey(frozenKey);
+  const mat = corrData[ck];
+  if (!mat) return;
+
+  const rows = [];
+  for (let j=0;j<8;j++) {
+    if (j===assetIdx) continue;
+    rows.push({ j, c: mat[assetIdx][j] });
+  }
+  rows.sort((a,b) => Math.abs(b.c) - Math.abs(a.c));
+
+  const list = document.getElementById('corr-list');
+  list.innerHTML = '';
+
+  rows.forEach(({ j, c }) => {
+    const col     = ASSET_COLS[j];
+    const dotCol  = COLORS[j];
+    const barCol  = c>0 ? '#39ff14' : '#ff3333';
+    const barW    = Math.abs(c)*100;
+    const overlaid = activeOverlays.has(col);
+
+    const row = document.createElement('div');
+    row.className = `corr-row${overlaid?' overlaid':''}`;
+    if (overlaid) {
+      row.style.borderLeftColor = dotCol;
+      row.style.color = dotCol;
+    }
+    row.dataset.col = col;
+    row.innerHTML = `
+      <div class="cr-dot" style="background:${dotCol}"></div>
+      <div class="cr-name">${SHORT[j]}</div>
+      <div class="cr-bar-bg">
+        <div class="cr-bar-fill" style="width:${barW}%;background:${barCol};opacity:0.7"></div>
+      </div>
+      <div class="cr-val" style="color:${barCol}">${c>0?'+':''}${c.toFixed(2)}</div>`;
+    row.addEventListener('click', () => toggleOverlay(col));
+    list.appendChild(row);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INTERACTIONS
+═══════════════════════════════════════════════════════════════ */
+function setViewMode(mode) {
+  viewMode = mode;
+  document.getElementById('btn-raw').classList.toggle('active',  mode==='raw');
+  document.getElementById('btn-norm').classList.toggle('active', mode==='norm');
+  const badge = document.getElementById('mode-badge');
+  if (badge) {
+    badge.textContent = mode==='raw' ? 'RAW · ACTUAL PRICE' : 'NORM · BASE-100 REBASED';
+    badge.style.color = mode==='norm' ? 'rgba(57,255,20,0.7)' : 'rgba(255,255,255,0.45)';
+    badge.style.borderColor = mode==='norm' ? 'rgba(57,255,20,0.3)' : 'rgba(255,255,255,0.1)';
+  }
+  recomputeY();
+  drawChart();
+}
+
+function setRegimes(on) {
+  showRegimes = on;
+  document.getElementById('btn-reg-on').classList.toggle('active',  on);
+  document.getElementById('btn-reg-off').classList.toggle('active', !on);
+  drawChart();
+}
+
+function selectVol(w) {
+  selectedVol = w;
+  document.querySelectorAll('.vol-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.w===w));
+  document.querySelectorAll('.vol-row').forEach(r => {
+    r.classList.toggle('selected', r.dataset.w===w);
+    const vv = r.querySelector('.vol-val');
+    if (vv) vv.style.color = r.dataset.w===w ? '#39ff14' : vv.dataset.baseColor || '';
+  });
+  updateVolNote();
+}
+
+function toggleOverlay(col) {
+  if (activeOverlays.has(col)) {
+    activeOverlays.delete(col);
+  } else {
+    if (activeOverlays.size >= 2) {
+      activeOverlays.delete(activeOverlays.values().next().value);
+    }
+    activeOverlays.add(col);
+    // Auto-switch to norm for comparable overlay
+    if (viewMode==='raw') {
+      viewMode='norm';
+      document.getElementById('btn-raw').classList.remove('active');
+      document.getElementById('btn-norm').classList.add('active');
+    }
+  }
+
+  const statusEl = document.getElementById('overlay-status');
+  if (activeOverlays.size>0) {
+    statusEl.textContent = `${activeOverlays.size} OVERLAY${activeOverlays.size>1?'S':''} ACTIVE`;
+    statusEl.classList.add('active-overlays');
+  } else {
+    statusEl.textContent = 'CLICK CORRELATION ROW TO OVERLAY';
+    statusEl.classList.remove('active-overlays');
+  }
+
+  renderCorrPanel();
+  recomputeY();
+  drawChart();
+}
+
+function zoomToDrawdown() {
+  if (!metrics?.drawdown_peak_date || !metrics?.drawdown_trough_date) return;
+
+  const peak   = new Date(metrics.drawdown_peak_date   + 'T12:00:00');
+  const trough = new Date(metrics.drawdown_trough_date + 'T12:00:00');
+  const span   = trough.getTime() - peak.getTime();
+  const pad    = span * 0.20;
+
+  const zStart = new Date(peak.getTime()   - pad);
+  const zEnd   = new Date(Math.min(
+    trough.getTime() + pad,
+    frozenDate.getTime() + 30*24*60*60*1000  // slight void still visible
+  ));
+
+  xSc.domain([zStart, zEnd]);
+  isZoomed = true;
+
+  document.getElementById('reset-zoom-btn').style.display = 'block';
+  const zBtn = document.getElementById('zoom-btn');
+  zBtn.classList.add('zoomed');
+  zBtn.textContent = 'VIEWING CRASH CORRIDOR ↗';
+
+  recomputeY();
+  drawChart();
+}
+
+function resetZoom() {
+  xSc.domain(origXDomain);
+  isZoomed = false;
+
+  document.getElementById('reset-zoom-btn').style.display = 'none';
+  const zBtn = document.getElementById('zoom-btn');
+  zBtn.classList.remove('zoomed');
+  zBtn.textContent = 'ZOOM TO CRASH CORRIDOR ↗';
+
+  recomputeY();
+  drawChart();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════════════ */
+function leaveToIndex() {
+  const ov = document.getElementById('fade-overlay');
+  ov.classList.remove('gone');
+  ov.classList.add('active');
+  setTimeout(() => { window.location.href = 'index.html'; }, 700);
+}
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') leaveToIndex();
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════ */
+window.addEventListener('load', boot);
+</script>
+</body>
+</html>

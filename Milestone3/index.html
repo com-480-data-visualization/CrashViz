@@ -6,11 +6,14 @@
 <title>MARKET REGIME NAVIGATOR // 2000–2025</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
+/* ═══════════════════════════════════════════════════════════════
+   RESET & VARIABLES
+══════════════════════════════════════════════════════════════════ */
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
 :root {
-  --bg:#000; --border:rgba(255,255,255,0.07); --dim:rgba(255,255,255,0.22);
-  --mid:rgba(255,255,255,0.55); --hi:rgba(255,255,255,0.9);
+  --bg:#000510; --border:rgba(255,255,255,0.08); --dim:rgba(255,255,255,0.25);
+  --mid:rgba(255,255,255,0.60); --hi:rgba(255,255,255,0.95);
   --green:#39ff14; --red:#ff3333; --orange:#ffa500;
   --mono:'Courier New','Lucida Console',monospace;
 }
@@ -22,10 +25,28 @@ body {
   display:flex; flex-direction:column; letter-spacing:0.03em;
 }
 
+/* ── ATMOSPHERICS ──────────────────────────────────────────────── */
+.scanlines {
+  position:fixed; inset:0; z-index:2; pointer-events:none;
+  background:repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px
+  );
+}
+
+.vignette {
+  position:fixed; inset:0; z-index:3; pointer-events:none;
+  background:radial-gradient(ellipse at center,
+    transparent 20%,
+    rgba(0,0,0,0.4) 60%,
+    rgba(0,0,0,0.85) 100%
+  );
+}
+
 /* ── HEADER ────────────────────────────────────────────────────── */
 #header {
   flex-shrink:0; height:48px; border-bottom:0.5px solid var(--border);
-  display:flex; align-items:center; padding:0 20px; gap:24px;
+  display:flex; align-items:center; padding:0 24px; gap:24px;
   background:rgba(0,0,0,0.96); z-index:100; position:relative;
 }
 .logo { font-size:15px; font-weight:bold; letter-spacing:0.16em; }
@@ -34,10 +55,10 @@ body {
   font-family:var(--mono); font-size:11px; letter-spacing:0.16em;
   padding:6px 14px; background:transparent;
   border:0.5px solid rgba(255,255,255,0.22); color:var(--mid);
-  cursor:pointer; transition:background 0.25s, color 0.25s, border-color 0.25s;
+  cursor:pointer; transition:all 0.25s;
 }
 #home-btn:hover { background:rgba(57,255,20,0.12); color:var(--green); border-color:rgba(57,255,20,0.5); }
-.hstat { font-size:11px; color:var(--mid); display:flex; align-items:center; gap:6px; }
+.hstat { font-size:11px; color:var(--mid); display:flex; align-items:center; gap:6px; letter-spacing:0.08em; }
 .hstat b { color:var(--hi); font-weight:bold; }
 #date-display {
   margin-left:auto; margin-right:auto;
@@ -45,7 +66,10 @@ body {
   text-shadow:0 0 12px rgba(57,255,20,0.4);
   font-variant-numeric:tabular-nums;
 }
-#regime-label { font-size:11px; padding:4px 14px; border:0.5px solid; letter-spacing:0.16em; font-weight:bold; transition:color 0.6s,border-color 0.6s; }
+#regime-label { 
+  font-size:11px; padding:4px 14px; border:0.5px solid; 
+  letter-spacing:0.16em; font-weight:bold; transition:all 0.6s; 
+}
 
 /* ── HELP BUTTON + POPOVER ─────────────────────────────────────── */
 #help-btn {
@@ -54,7 +78,7 @@ body {
   background:transparent; border:0.5px solid rgba(255,255,255,0.3);
   color:var(--mid); cursor:pointer;
   display:flex; align-items:center; justify-content:center;
-  transition:background 0.2s, color 0.2s, border-color 0.2s;
+  transition:all 0.2s;
 }
 #help-btn:hover { background:rgba(57,255,20,0.1); color:var(--green); border-color:rgba(57,255,20,0.6); }
 
@@ -65,56 +89,267 @@ body {
   z-index:200; box-shadow:0 0 20px rgba(57,255,20,0.15);
   font-size:11px; line-height:1.7; color:var(--mid); letter-spacing:0.03em;
   opacity:0; pointer-events:none; transform:translateY(-6px);
-  transition:opacity 0.25s, transform 0.25s;
+  transition:all 0.25s;
 }
 #help-popover.open { opacity:1; pointer-events:all; transform:translateY(0); }
 #help-popover h4 {
-  font-size:10px; color:var(--green); letter-spacing:0.18em;
+  font-size:10px; color:rgba(255,255,255,0.95); letter-spacing:0.18em;
   margin-bottom:6px; margin-top:12px; font-weight:bold;
 }
 #help-popover h4:first-child { margin-top:0; }
 #help-popover .h-val { color:var(--hi); font-weight:bold; }
 
-/* Generic tooltip for crisis buttons */
-.crisis-btn { position:relative; }
+/* ── HUD LAYOUT ────────────────────────────────────────────────── */
+#main { 
+  flex:1; 
+  position:relative; 
+  overflow:hidden; 
+  width:100vw;
+}
+
+#graph-col { 
+  position:absolute; 
+  inset:0; 
+  z-index:1; 
+  user-select:none; 
+  -webkit-user-select:none; 
+}
+
+/* ── FLOATING TIMELINE (LEFT) ──────────────────────────────────── */
+#timeline-col {
+  position:absolute;
+  left:24px; top:24px; bottom:24px;
+  width:100px; z-index:10;
+  background:rgba(5,5,10,0.45);
+  backdrop-filter:blur(16px);
+  border:0.5px solid var(--border);
+  border-radius:6px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6), inset 0 0 12px rgba(255,255,255,0.02);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+
+#timeline-strip {
+  flex:1; position:relative; overflow:hidden; cursor:ns-resize;
+}
+#timeline-track {
+  position:absolute; left:50%; transform:translateX(-50%);
+  width:0.5px; background:var(--border); top:0; bottom:0;
+}
+#cursor-line {
+  position:absolute; left:0; right:0; top:50%; height:0.5px;
+  background:rgba(57,255,20,0.4); transform:translateY(-50%);
+  pointer-events:none; z-index:10;
+  box-shadow:0 0 8px rgba(57,255,20,0.5);
+}
+#cursor-line::before {
+  content:'['; position:absolute; left:8px; top:-6px;
+  color:var(--green); font-size:12px; font-weight:bold; text-shadow:0 0 8px var(--green);
+}
+#cursor-line::after {
+  content:']'; position:absolute; right:8px; top:-6px;
+  color:var(--green); font-size:12px; font-weight:bold; text-shadow:0 0 8px var(--green);
+}
+
+#timeline-years { position:absolute; top:0; left:0; right:0; transition:transform 0.06s linear; }
+.year-tick {
+  height:38px; display:flex; align-items:center; justify-content:center;
+  position:relative; font-size:10px; color:var(--mid); letter-spacing:0.1em;
+  transition:all 0.3s; cursor:pointer;
+}
+.year-tick::before {
+  content:''; position:absolute; left:50%; top:50%;
+  transform:translate(-50%,-50%); width:6px; height:0.5px; background:var(--border);
+}
+.year-tick:hover { color:var(--hi); }
+.year-tick.active {
+  color:var(--green); font-weight:bold; font-size:18px;
+  text-shadow:0 0 8px rgba(57,255,20,0.6);
+}
+.year-tick.active::before { width:24px; background:var(--green); opacity:0.6; }
+.year-tick.crisis { color:rgba(255,80,80,0.65); }
+.year-tick.crisis.active { color:var(--red); text-shadow:0 0 8px rgba(255,51,51,0.6); }
+.year-tick.crisis.active::before { background:var(--red); opacity:0.6; }
+
+/* ── FLOATING CRISIS NAV (TOP CENTER) ──────────────────────────── */
+#crisis-nav {
+  position:absolute;
+  top:24px; left:50%;
+  transform:translateX(-50%);
+  z-index:20;
+  display:flex; align-items:center; gap:8px;
+  background:rgba(5,5,10,0.6);
+  backdrop-filter:blur(16px);
+  padding:6px 8px;
+  border:0.5px solid var(--border);
+  border-radius:30px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);
+}
+.crisis-nav-label {
+  font-size:9px; color:var(--mid); letter-spacing:0.18em;
+  font-weight:bold; padding-left:8px; padding-right:4px;
+}
+.crisis-btn {
+  position:relative;
+  font-family:var(--mono); font-size:10px; letter-spacing:0.1em;
+  padding:6px 14px; background:rgba(255,51,51,0.05);
+  border:0.5px solid rgba(255,51,51,0.35); color:rgba(255,80,80,0.85);
+  border-radius:20px;
+  cursor:pointer; text-align:center; font-weight:bold;
+  transition:all 0.25s;
+}
+.crisis-btn:hover {
+  background:rgba(255,51,51,0.15); color:var(--red);
+  border-color:rgba(255,51,51,0.7);
+  box-shadow:0 0 14px rgba(255,51,51,0.4);
+}
 .crisis-btn .ttip {
-  position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%);
+  position:absolute; top:calc(100% + 12px); left:50%; transform:translateX(-50%);
   width:230px; padding:10px 12px;
   background:rgba(0,0,0,0.96); border:0.5px solid rgba(255,51,51,0.5);
   font-size:10px; line-height:1.6; color:var(--mid); letter-spacing:0.03em;
   opacity:0; pointer-events:none; z-index:200;
-  transition:opacity 0.25s;
-  text-align:left; text-transform:none; font-weight:normal;
-  box-shadow:0 0 18px rgba(255,51,51,0.2);
+  transition:opacity 0.25s; text-align:left; text-transform:none; font-weight:normal;
+  box-shadow:0 0 18px rgba(255,51,51,0.2); border-radius:4px;
 }
 .crisis-btn:hover .ttip { opacity:1; }
-.crisis-btn .ttip b { color:#ff6b6b; font-size:11px; }
+.crisis-btn .ttip b { color:#ff6b6b; font-size:11px; display:block; margin-bottom:4px; }
 
-/* Generic small info icon */
+/* ── FLOATING DATA PANEL (RIGHT) ───────────────────────────────── */
+#right-panel {
+  position:absolute;
+  right:24px; top:24px; bottom:24px;
+  width:260px; z-index:10;
+  background:rgba(5,5,10,0.45);
+  backdrop-filter:blur(16px);
+  border:0.5px solid var(--border);
+  border-radius:6px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6), inset 0 0 12px rgba(255,255,255,0.02);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.rp-section { padding:16px 18px; border-bottom:0.5px solid var(--border); }
+.rp-label { font-size:9.5px; letter-spacing:0.18em; color:var(--mid); margin-bottom:12px; font-weight:bold; }
+
+/* Clickable Asset Row & Gauge */
+.asset-row { 
+  display:flex; align-items:center; gap:10px; padding:6px 8px; 
+  font-size:11px; color:var(--mid); cursor:pointer;
+  border-left:2px solid transparent; transition:all 0.2s;
+  border-radius: 0 4px 4px 0;
+}
+.asset-row:hover { background:rgba(255,255,255,0.04); border-left-color:var(--hi); color:var(--hi); }
+.asset-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.asset-gauge-wrap { flex:1; height:4px; background:rgba(255,255,255,0.08); position:relative; border-radius:2px; overflow:hidden; }
+.asset-gauge-fill { position:absolute; left:0; top:0; height:100%; transition:width 0.5s cubic-bezier(0.16,1,0.3,1), background 0.5s; }
+
+#corr-top { flex:1; overflow:hidden; padding:16px 18px; }
+.corr-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 0; font-size:10px; color:var(--mid);
+  border-bottom:0.5px solid rgba(255,255,255,0.05);
+}
+.corr-pair { color:var(--mid); font-size:9.5px; }
+.corr-pos { color:var(--green); text-align:right; width:40px; font-weight:bold; }
+.corr-neg { color:var(--red); text-align:right; width:40px; font-weight:bold; }
+.corr-bar-bg { height:3px; background:rgba(255,255,255,0.08); margin-top:4px; }
+.corr-bar-fill { height:100%; border-radius:1px; transition:width 0.5s; }
+
+/* Fixed Generic Info Icon (Clickable, no local tooltip) */
 .info-i {
   display:inline-flex; align-items:center; justify-content:center;
   width:13px; height:13px; border-radius:50%; font-size:9px;
   background:rgba(255,255,255,0.08); color:var(--mid);
-  cursor:help; margin-left:5px; font-weight:bold;
-  transition:background 0.2s, color 0.2s;
-  position:relative;
+  cursor:pointer; margin-left:5px; font-weight:bold;
+  transition:all 0.2s;
 }
 .info-i:hover { background:rgba(57,255,20,0.18); color:var(--green); }
-.info-i .ttip {
-  position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
-  width:200px; padding:8px 10px;
-  background:rgba(0,0,0,0.96); border:0.5px solid rgba(57,255,20,0.4);
-  font-size:10px; line-height:1.6; color:var(--mid); letter-spacing:0.03em;
-  opacity:0; pointer-events:none; z-index:200;
-  transition:opacity 0.25s;
-  text-align:left; font-weight:normal;
+
+/* ── GRAPH CANVAS ──────────────────────────────────────────────── */
+#topo-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+#graph-svg { position:absolute; inset:0; width:100%; height:100%; z-index:1; }
+#scroll-hint {
+  position:absolute; bottom:24px; left:50%; transform:translateX(-50%);
+  font-size:9px; color:rgba(255,255,255,0.75); letter-spacing:0.14em;
+  pointer-events:none; z-index:30; white-space:nowrap;
+  background:rgba(0,0,0,0.6); padding:6px 16px; border-radius:20px;
+  border:0.5px solid rgba(255,255,255,0.18);
+  animation:hint-pulse 3s ease-in-out infinite;
 }
-.info-i:hover .ttip { opacity:1; }
+@keyframes hint-pulse { 0%,100%{opacity:0.9} 50%{opacity:0.45} }
+
+/* Improved 3D Orb Node Visuals */
+.node-label { 
+  font-family:var(--mono); font-size:10px; font-weight:bold; 
+  fill:rgba(255,255,255,0.95); text-anchor:middle; pointer-events:none; 
+  letter-spacing:0.1em; text-shadow:0 0 6px rgba(0,0,0,1); 
+}
+.node-group { cursor:pointer; }
+.orb-layer { transition: filter 0.25s, opacity 0.25s; }
+
+/* Links */
+.link-base { pointer-events:none; fill:none; }
+.link-flow { pointer-events:none; fill:none; }
+
+/* ── DYNAMIC FLOATING DOSSIER ──────────────────────────────────── */
+#dossier-panel {
+  position:absolute;
+  width:260px;
+  background:rgba(5,5,10,0.85);
+  backdrop-filter:blur(24px);
+  border:0.5px solid var(--green);
+  border-radius:6px;
+  box-shadow:0 0 30px rgba(57,255,20,0.15), 0 10px 30px rgba(0,0,0,0.8);
+  z-index:150; display:flex; flex-direction:column; overflow:hidden;
+  opacity:0; pointer-events:none;
+  transform:translateY(10px) scale(0.98);
+  transition:opacity 0.25s ease, transform 0.25s ease;
+}
+#dossier-panel.open { 
+  opacity:1; pointer-events:all; 
+  transform:translateY(0) scale(1);
+}
+
+#dossier-header { padding:14px 16px 12px; border-bottom:0.5px solid var(--border); flex-shrink:0; }
+#dossier-close {
+  position:absolute; top:12px; right:12px;
+  font-size:10px; color:var(--dim); cursor:pointer; letter-spacing:0.08em;
+  background:none; border:none; font-family:var(--mono); transition:color 0.2s;
+}
+#dossier-close:hover { color:var(--hi); }
+#dossier-asset-name { font-size:16px; font-weight:bold; letter-spacing:0.1em; margin-bottom:2px; }
+#dossier-ticker { font-size:9px; color:var(--dim); letter-spacing:0.12em; }
+#dossier-aval-row { display:flex; align-items:baseline; gap:8px; margin-top:10px; }
+#dossier-aval-num { font-size:24px; font-weight:bold; }
+#dossier-aval-label { font-size:9px; color:var(--dim); letter-spacing:0.12em; }
+
+#dossier-body { flex:1; padding:14px 16px; }
+.d-section-label { font-size:8px; letter-spacing:0.18em; color:var(--dim); margin-bottom:10px; margin-top:14px; font-weight:bold; }
+.d-section-label:first-child { margin-top:0; }
+
+.d-corr-row { display:flex; align-items:center; gap:8px; padding:5px 0; }
+.d-corr-dot  { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.d-corr-name { font-size:9.5px; color:var(--mid); width:58px; flex-shrink:0; white-space:nowrap; }
+.d-corr-bar-bg { flex:1; height:3px; background:rgba(255,255,255,0.07); position:relative; }
+.d-corr-bar-fill { position:absolute; left:0; top:0; height:100%; border-radius:2px; transition:width 0.5s; }
+.d-corr-val { font-size:9.5px; width:36px; text-align:right; flex-shrink:0; font-weight:bold; }
+
+#dossier-footer { padding:12px 16px; border-top:0.5px solid var(--border); flex-shrink:0; }
+.dossier-btn {
+  display:block; width:100%; padding:8px 0; margin-bottom:8px;
+  border:0.5px solid rgba(57,255,20,0.4); background:rgba(57,255,20,0.03);
+  color:var(--green); font-family:var(--mono); font-size:9.5px;
+  letter-spacing:0.16em; cursor:pointer; text-align:center;
+  transition:all 0.25s; border-radius:2px;
+}
+.dossier-btn:last-child { margin-bottom:0; }
+.dossier-btn:hover { background:rgba(57,255,20,0.15); box-shadow:0 0 10px rgba(57,255,20,0.2); }
+
+/* ── REGIME STYLING ────────────────────────────────────────────── */
 .regime-stable { color:var(--green); border-color:rgba(57,255,20,0.4); }
 .regime-stress  { color:var(--orange); border-color:rgba(255,165,0,0.4); }
 .regime-crisis  { color:var(--red);    border-color:rgba(255,51,51,0.4); }
 
-/* Glitch effect on regime crossing */
+/* Glitch effects */
 @keyframes glitch {
   0%   { text-shadow:2px 0 #ff0000,-2px 0 #00ffff; transform:translateX(0); filter:none; }
   20%  { text-shadow:-3px 0 #ff0000, 3px 0 #00ffff; transform:translateX(2px); filter:hue-rotate(80deg); }
@@ -132,223 +367,30 @@ body {
 }
 .glitch-label { animation:glitch-label 0.55s steps(3) 1; }
 
-/* ── LAYOUT ────────────────────────────────────────────────────── */
-#main { flex:1; display:flex; overflow:hidden; }
-
-/* ── TIMELINE ──────────────────────────────────────────────────── */
-#timeline-col {
-  flex-shrink:0; width:110px; border-right:0.5px solid var(--border);
-  position:relative; overflow:hidden; user-select:none;
-  background:rgba(0,0,0,0.5);
-  display:flex; flex-direction:column;
-}
-
-/* Fixed crisis nav at the top */
-#crisis-nav {
-  flex-shrink:0; padding:10px 8px 8px;
-  border-bottom:0.5px solid var(--border);
-  background:rgba(0,0,0,0.85); z-index:30;
-  display:flex; flex-direction:column; gap:5px;
-}
-.crisis-nav-label {
-  font-size:8px; color:var(--mid); letter-spacing:0.18em;
-  text-align:center; margin-bottom:4px; font-weight:bold;
-}
-.crisis-btn {
-  font-family:var(--mono); font-size:10px; letter-spacing:0.1em;
-  padding:5px 0; background:rgba(255,51,51,0.05);
-  border:0.5px solid rgba(255,51,51,0.35); color:rgba(255,80,80,0.85);
-  cursor:pointer; text-align:center; font-weight:bold;
-  transition:background 0.25s, color 0.25s, border-color 0.25s, box-shadow 0.25s;
-}
-.crisis-btn:hover {
-  background:rgba(255,51,51,0.15); color:var(--red);
-  border-color:rgba(255,51,51,0.7);
-  box-shadow:0 0 14px rgba(255,51,51,0.4);
-}
-
-/* Year strip below */
-#timeline-strip {
-  flex:1; position:relative; overflow:hidden; cursor:ns-resize;
-}
-#timeline-track {
-  position:absolute; left:50%; transform:translateX(-50%);
-  width:0.5px; background:var(--border); top:0; bottom:0;
-}
-#cursor-line {
-  position:absolute; left:0; right:0; top:50%; height:0.5px;
-  background:rgba(57,255,20,0.4); transform:translateY(-50%);
-  pointer-events:none; z-index:10;
-  box-shadow:0 0 8px rgba(57,255,20,0.5);
-}
-#cursor-line::after {
-  content:''; position:absolute; right:-3px; top:-4px;
-  width:8px; height:8px; background:var(--green);
-  border-radius:50%; box-shadow:0 0 12px var(--green), 0 0 24px rgba(57,255,20,0.5);
-}
-#timeline-years { position:absolute; top:0; left:0; right:0; transition:transform 0.06s linear; }
-.year-tick {
-  height:38px; display:flex; align-items:center; justify-content:center;
-  position:relative; font-size:10px; color:var(--mid); letter-spacing:0.1em;
-  transition:color 0.3s, font-size 0.3s; cursor:pointer;
-}
-.year-tick::before {
-  content:''; position:absolute; left:50%; top:50%;
-  transform:translate(-50%,-50%); width:6px; height:0.5px; background:var(--border);
-}
-.year-tick:hover { color:var(--hi); }
-.year-tick.active {
-  color:var(--green); font-weight:bold; font-size:18px;
-  text-shadow:0 0 8px rgba(57,255,20,0.6);
-}
-.year-tick.active::before { width:40px; background:var(--green); opacity:0.6; }
-.year-tick.crisis { color:rgba(255,80,80,0.65); }
-.year-tick.crisis.active { color:var(--red); text-shadow:0 0 8px rgba(255,51,51,0.6); }
-.year-tick.crisis.active::before { background:var(--red); opacity:0.6; }
-
-/* ── GRAPH ─────────────────────────────────────────────────────── */
-#graph-col { flex:1; position:relative; overflow:hidden; user-select:none; -webkit-user-select:none; }
-#topo-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
-#graph-col::after {
-  content:''; position:absolute; inset:0;
-  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 3px,rgba(0,0,0,0.07) 4px);
-  pointer-events:none; z-index:10;
-}
-#graph-svg { position:absolute; inset:0; width:100%; height:100%; z-index:1; }
-#scroll-hint {
-  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
-  font-size:9px; color:rgba(255,255,255,0.75); letter-spacing:0.14em;
-  pointer-events:none; z-index:30; white-space:nowrap;
-  background:rgba(0,0,0,0.6); padding:5px 14px;
-  border:0.5px solid rgba(255,255,255,0.18);
-  animation:hint-pulse 3s ease-in-out infinite;
-}
-@keyframes hint-pulse { 0%,100%{opacity:0.9} 50%{opacity:0.45} }
-
-/* ── RIGHT PANEL ───────────────────────────────────────────────── */
-#right-panel {
-  flex-shrink:0; width:240px; border-left:0.5px solid var(--border);
-  display:flex; flex-direction:column; overflow:hidden;
-}
-.rp-section { padding:14px 16px; border-bottom:0.5px solid var(--border); }
-.rp-label { font-size:9px; letter-spacing:0.18em; color:var(--mid); margin-bottom:10px; font-weight:bold; }
-.asset-row { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:11px; color:var(--mid); }
-.asset-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.sparkline-wrap { margin-left:auto; display:flex; align-items:flex-end; gap:2px; height:18px; }
-.spark-bar { width:5px; border-radius:1px 1px 0 0; transition:height 0.4s, background 0.4s; }
-
-#corr-top { flex:1; overflow:hidden; padding:14px 16px; }
-.corr-row {
-  display:flex; justify-content:space-between; align-items:center;
-  padding:5px 0; font-size:10px; color:var(--mid);
-  border-bottom:0.5px solid rgba(255,255,255,0.05);
-}
-.corr-pair { color:var(--mid); font-size:9.5px; }
-.corr-pos { color:var(--green); }
-.corr-neg { color:var(--red); }
-.corr-bar-bg { height:3px; background:rgba(255,255,255,0.08); margin-top:3px; }
-.corr-bar-fill { height:100%; border-radius:1px; transition:width 0.5s; }
-
-/* ── NODE SVG ─────────────────────────────────────────────────── */
-.node-label { font-family:var(--mono); font-size:11px; font-weight:bold; fill:rgba(255,255,255,0.95); text-anchor:middle; pointer-events:none; letter-spacing:0.08em; text-shadow:0 0 4px rgba(0,0,0,0.8); user-select:none; -webkit-user-select:none; }
-.node-group { cursor:pointer; user-select:none; -webkit-user-select:none; }
-#graph-svg, #graph-svg text { user-select:none; -webkit-user-select:none; }
-.node-group .node-ring, .node-group .mid-glow { transition:opacity 0.25s ease, stroke-width 0.25s ease; }
-.link { pointer-events:none; fill:none; }
-
-/* First-time click hint — fades out after 6s or on first node click */
+/* First-time click hint */
 #click-hint {
-  position:absolute; top:18px; left:50%; transform:translateX(-50%);
-  background:rgba(0,0,0,0.78);
-  border:0.5px solid rgba(57,255,20,0.55);
-  padding:7px 16px; font-size:10px; letter-spacing:0.14em;
+  position:absolute; top:24px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,0.85); backdrop-filter:blur(10px);
+  border:0.5px solid rgba(57,255,20,0.55); border-radius:20px;
+  padding:8px 20px; font-size:10px; letter-spacing:0.14em;
   color:var(--green); z-index:35; pointer-events:none;
   display:flex; align-items:center; gap:10px;
   animation:click-hint-pulse 2s ease-in-out infinite;
   transition:opacity 0.6s ease, transform 0.6s ease;
   white-space:nowrap;
 }
-#click-hint.hide { opacity:0; transform:translateX(-50%) translateY(-8px); }
-#click-hint .ch-arrow {
-  font-size:12px; color:var(--green);
-  animation:ch-bob 1.4s ease-in-out infinite;
-}
-@keyframes click-hint-pulse {
-  0%,100% { box-shadow:0 0 6px rgba(57,255,20,0.35); }
-  50%      { box-shadow:0 0 18px rgba(57,255,20,0.65),0 0 30px rgba(57,255,20,0.15); }
-}
-@keyframes ch-bob {
-  0%,100% { transform:scale(1); opacity:1; }
-  50%      { transform:scale(1.3); opacity:0.7; }
-}
-
-/* ── NODE DOSSIER PANEL ───────────────────────────────────────── */
-#dossier-panel {
-  position:absolute; top:0; right:0; bottom:0; width:260px;
-  background:rgba(0,0,0,0.92); border-left:0.5px solid var(--border);
-  z-index:50; display:flex; flex-direction:column; overflow:hidden;
-  transform:translateX(100%); transition:transform 0.35s cubic-bezier(0.16,1,0.3,1);
-  backdrop-filter:blur(6px);
-}
-#dossier-panel.open { transform:translateX(0); }
-
-#dossier-header {
-  padding:12px 14px 10px; border-bottom:0.5px solid var(--border); flex-shrink:0;
-}
-#dossier-close {
-  position:absolute; top:10px; right:12px;
-  font-size:11px; color:var(--dim); cursor:pointer; letter-spacing:0.08em;
-  background:none; border:none; font-family:var(--mono);
-  transition:color 0.2s;
-}
-#dossier-close:hover { color:var(--hi); }
-#dossier-asset-name {
-  font-size:15px; font-weight:bold; letter-spacing:0.1em; margin-bottom:2px;
-}
-#dossier-ticker { font-size:8px; color:var(--dim); letter-spacing:0.12em; }
-#dossier-aval-row {
-  display:flex; align-items:baseline; gap:6px; margin-top:8px;
-}
-#dossier-aval-num { font-size:22px; font-weight:bold; }
-#dossier-aval-label { font-size:8px; color:var(--dim); letter-spacing:0.12em; }
-
-#dossier-body { flex:1; overflow-y:auto; padding:12px 14px; scrollbar-width:none; }
-#dossier-body::-webkit-scrollbar { display:none; }
-
-.d-section-label {
-  font-size:7px; letter-spacing:0.18em; color:var(--dim);
-  margin-bottom:8px; margin-top:12px;
-}
-.d-section-label:first-child { margin-top:0; }
-
-.d-corr-row { display:flex; align-items:center; gap:6px; padding:4px 0; }
-.d-corr-dot  { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
-.d-corr-name { font-size:8.5px; color:var(--mid); width:58px; flex-shrink:0; white-space:nowrap; }
-.d-corr-bar-bg { flex:1; height:3px; background:rgba(255,255,255,0.07); position:relative; }
-.d-corr-bar-fill { position:absolute; left:0; top:0; height:100%; border-radius:2px; transition:width 0.5s; }
-.d-corr-val { font-size:8px; width:34px; text-align:right; flex-shrink:0; }
-
-#dossier-footer {
-  padding:10px 14px; border-top:0.5px solid var(--border); flex-shrink:0;
-}
-#dossier-goto {
-  display:block; width:100%; padding:8px 0;
-  border:0.5px solid rgba(57,255,20,0.4); background:transparent;
-  color:var(--green); font-family:var(--mono); font-size:9px;
-  letter-spacing:0.16em; cursor:pointer; text-align:center;
-  transition:background 0.25s, color 0.25s;
-}
-#dossier-goto:hover { background:rgba(57,255,20,0.12); }
+#click-hint.hide { opacity:0; transform:translateX(-50%) translateY(-10px); }
 
 /* ── FOOTER ────────────────────────────────────────────────────── */
 #footer {
   flex-shrink:0; height:28px; border-top:0.5px solid var(--border);
-  display:flex; align-items:center; padding:0 20px; gap:20px;
+  display:flex; align-items:center; padding:0 24px; gap:24px;
   font-size:10px; color:var(--mid); letter-spacing:0.09em;
+  background:rgba(0,0,0,0.96); position:relative; z-index:100;
 }
 #footer span { color:var(--hi); font-weight:bold; }
 
-/* ── Fade overlay (page transitions) ───────────────────────────── */
+/* ── FADE OVERLAY ──────────────────────────────────────────────── */
 #fade-overlay {
   position:fixed; inset:0; z-index:2000;
   background:#000; opacity:1; pointer-events:none;
@@ -356,10 +398,229 @@ body {
 }
 #fade-overlay.gone   { opacity:0; }
 #fade-overlay.active { opacity:1; pointer-events:all; }
+
+/* ── SUBTLE BG RADIAL GRADIENT ────────────────────────────── */
+body::before {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:radial-gradient(ellipse 70% 60% at 50% 48%,
+    rgba(20,40,80,0.18) 0%, transparent 70%);
+}
+
+/* ── CRISIS PULSE OVERLAY ─────────────────────────────────── */
+#crisis-pulse {
+  position:fixed; inset:0; z-index:50; pointer-events:none; opacity:0;
+  background:radial-gradient(ellipse 65% 55% at 50% 48%,
+    rgba(255,30,30,0.13) 0%, rgba(255,0,0,0.04) 55%, transparent 75%);
+}
+@keyframes crisisPulseAnim {
+  0%   { opacity:0; }
+  12%  { opacity:1; }
+  100% { opacity:0; }
+}
+.crisis-flash { animation:crisisPulseAnim 1.8s ease-out forwards; }
+
+/* ── ORB BREATHING ────────────────────────────────────────── */
+@keyframes orbBreathe {
+  0%,100% { opacity:0.13; }
+  50%     { opacity:0.26; }
+}
+@keyframes orbBreatheCrisis {
+  0%,100% { opacity:0.18; }
+  50%     { opacity:0.52; }
+}
+.orb-glow { animation:orbBreathe 3.8s ease-in-out infinite; }
+#graph-svg.crisis-regime .orb-glow { animation:orbBreatheCrisis 1.4s ease-in-out infinite; }
+#graph-svg.stress-regime .orb-glow { animation:orbBreathe 2.4s ease-in-out infinite; }
+
+/* ── LINK HOVER TOOLTIP ───────────────────────────────────── */
+#link-tooltip {
+  position:fixed; display:none;
+  background:rgba(0,0,0,0.95); border:0.5px solid rgba(255,255,255,0.15);
+  padding:8px 13px; font-family:var(--mono); font-size:10px;
+  letter-spacing:0.05em; pointer-events:none; z-index:500;
+  line-height:1.8;
+}
+
+
+/* ── DOSSIER PANEL — smooth border transition ─────────────── */
+#dossier-panel {
+  transition:opacity 0.25s ease, transform 0.25s ease, border-color 0.5s ease, box-shadow 0.5s ease !important;
+}
+
+
+/* ── RIGHT PANEL MINIMAP ──────────────────────────────────── */
+#timeline-minimap {
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  cursor:crosshair;
+}
+#minimap-tooltip {
+  position:fixed; display:none;
+  background:rgba(0,0,0,0.94);
+  border:0.5px solid rgba(255,255,255,0.15);
+  padding:5px 10px; font-family:var(--mono);
+  font-size:9px; letter-spacing:0.12em;
+  pointer-events:none; z-index:600;
+  white-space:nowrap; color:var(--hi);
+}
+
+/* ── DATE DISPLAY — smooth regime color transition ─────────── */
+#date-display {
+  transition: color 0.55s ease, text-shadow 0.55s ease;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   FULL-SCREEN TIME NAVIGATOR
+══════════════════════════════════════════════════════════ */
+#time-nav-overlay {
+  position:fixed; inset:0; z-index:900;
+  background:rgba(0,0,4,0.93);
+  backdrop-filter:blur(12px);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none;
+  transition:opacity 0.3s ease;
+}
+#time-nav-overlay.open {
+  opacity:1; pointer-events:all;
+}
+
+#time-nav-panel {
+  width:min(1120px, 94vw);
+  height:min(720px, 90vh);
+  display:flex; flex-direction:column;
+  background:rgba(0,2,8,0.96);
+  border:0.5px solid rgba(255,255,255,0.12);
+  box-shadow:0 0 80px rgba(0,0,0,0.9), 0 0 40px rgba(57,255,20,0.05);
+  transform:scale(0.94) translateY(16px);
+  transition:transform 0.35s cubic-bezier(0.16,1,0.3,1);
+  overflow:hidden;
+}
+#time-nav-overlay.open #time-nav-panel {
+  transform:scale(1) translateY(0);
+}
+
+/* Header */
+#time-nav-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 20px; border-bottom:0.5px solid rgba(255,255,255,0.08);
+  flex-shrink:0; gap:16px;
+}
+#tnh-left { display:flex; flex-direction:column; gap:3px; }
+#tnh-title { font-size:13px; letter-spacing:0.22em; color:var(--green); font-weight:bold; }
+#tnh-hint  { font-size:10px; letter-spacing:0.14em; color:rgba(255,255,255,0.65); }
+#tnh-legend { display:flex; gap:16px; align-items:center; }
+.tnh-leg  { display:flex; align-items:center; gap:5px; font-size:9px; letter-spacing:0.14em; color:var(--mid); }
+.tnh-swatch { width:10px; height:10px; flex-shrink:0; }
+#time-nav-close {
+  font-family:var(--mono); font-size:11px; letter-spacing:0.18em;
+  padding:8px 20px; background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.45); color:rgba(255,255,255,0.9);
+  cursor:pointer; transition:all 0.2s; flex-shrink:0; font-weight:bold;
+}
+#time-nav-close:hover { background:rgba(255,255,255,0.12); border-color:#fff; color:#fff; }
+
+/* Month labels row */
+#time-nav-month-row {
+  display:grid; grid-template-columns:58px repeat(12,1fr);
+  padding:0 20px; flex-shrink:0;
+  border-bottom:0.5px solid rgba(255,255,255,0.05);
+}
+.tn-month-label {
+  text-align:center; padding:8px 0;
+  font-size:11px; letter-spacing:0.1em; color:rgba(255,255,255,0.7);
+  font-weight:bold;
+}
+.tn-year-spacer { }
+
+/* Grid body */
+#time-nav-body {
+  flex:1; overflow-y:auto; padding:0 20px 12px;
+  scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.08) transparent;
+}
+#time-nav-grid {
+  display:flex; flex-direction:column; gap:3px; padding-top:8px;
+}
+
+/* Year row */
+.tn-year-row {
+  display:grid; grid-template-columns:58px repeat(12,1fr);
+  gap:3px; align-items:center;
+}
+.tn-year-label {
+  font-size:12px; letter-spacing:0.06em; color:rgba(255,255,255,0.65);
+  text-align:right; padding-right:10px; flex-shrink:0;
+  font-weight:bold;
+}
+.tn-year-row:hover .tn-year-label { color:#fff; }
+
+/* Individual cell */
+.tn-cell {
+  height:24px; position:relative; cursor:pointer;
+  border:0.5px solid rgba(255,255,255,0.04);
+  transition:filter 0.12s, border-color 0.12s;
+  overflow:hidden;
+}
+.tn-cell:hover {
+  filter:brightness(1.8);
+  border-color:rgba(255,255,255,0.45);
+  z-index:2;
+}
+.tn-cell.current {
+  border:1.5px solid rgba(255,255,255,0.95) !important;
+  box-shadow:0 0 8px rgba(255,255,255,0.35), inset 0 0 6px rgba(255,255,255,0.1);
+  z-index:3;
+}
+.tn-cell.current::after {
+  content:'';
+  position:absolute; inset:0;
+  background:rgba(255,255,255,0.12);
+}
+/* Coupling bar at cell bottom */
+.tn-bar {
+  position:absolute; bottom:0; left:0;
+  height:3px; transition:width 0.3s;
+}
+
+/* Hover info bar */
+#time-nav-hover-bar {
+  display:flex; align-items:center; gap:20px;
+  padding:10px 20px; border-top:0.5px solid rgba(255,255,255,0.07);
+  flex-shrink:0; min-height:38px;
+  background:rgba(0,0,0,0.4);
+}
+#tnhb-date    { font-size:15px; font-weight:bold; letter-spacing:0.14em; color:var(--hi); min-width:120px; }
+#tnhb-regime  { font-size:10px; letter-spacing:0.18em; padding:3px 10px; border:0.5px solid; min-width:160px; }
+#tnhb-coupling{ font-size:10px; letter-spacing:0.12em; color:var(--dim); }
+
+#minimap-section { cursor:pointer; }
+
+
+/* ── MINIMAP OPEN HINT — pulsing above label ──────────────── */
+#minimap-open-hint {
+  font-size:8.5px; letter-spacing:0.14em;
+  color:var(--green); font-weight:bold;
+  margin-bottom:6px; text-align:center;
+  animation:hintBlink 2s ease-in-out infinite;
+  cursor:pointer;
+}
+@keyframes hintBlink {
+  0%,100% { opacity:0.9; }
+  50%     { opacity:0.3; }
+}
+#minimap-section:hover #minimap-open-hint {
+  animation:none; opacity:1;
+  text-shadow:0 0 8px rgba(57,255,20,0.6);
+}
+
 </style>
 </head>
 <body>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div id="crisis-pulse"></div>
 <div id="fade-overlay"></div>
+<div id="link-tooltip"></div>
 
 <div id="header">
   <div class="logo">&gt;_ <span class="accent">MARKET</span>GRAPH</div>
@@ -369,64 +630,57 @@ body {
   <div class="hstat">WINDOW <b>63D CORR</b></div>
   <div id="date-display">────────</div>
   <div id="regime-label" class="regime-stable">LOADING</div>
-  <button id="help-btn" onclick="toggleHelp()" title="What does this mean?">?</button>
+  <button id="help-btn" onclick="toggleHelp(event)" title="Terminology">?</button>
 </div>
 
-<!-- Help popover -->
 <div id="help-popover">
   <h4>// CORRELATION</h4>
   How prices of two assets move together over time. <span class="h-val">+1</span> means they move in lockstep, <span class="h-val">−1</span> means they move opposite, <span class="h-val">0</span> means independent. Calculated on a 63-day rolling window of daily returns.
-
   <h4>// AVG COUPLING</h4>
   An asset's mean <i>absolute</i> correlation to the other 7 assets. High coupling means this asset is moving with the rest of the market. Low coupling means it offers diversification.
-
   <h4>// REGIME</h4>
-  <span class="h-val">STABLE</span>: assets move mostly independently. <br>
-  <span style="color:var(--orange);font-weight:bold">STRESS</span>: correlations are rising, market stress is building. <br>
+  <span style="color:var(--green);font-weight:bold">STABLE</span>: assets move mostly independently.<br>
+  <span style="color:var(--orange);font-weight:bold">STRESS</span>: correlations are rising, market stress is building.<br>
   <span style="color:var(--red);font-weight:bold">CRISIS</span>: assets are moving together, diversification breaks down.
 </div>
 
 <div id="main">
 
-  <!-- TIMELINE -->
+  <div id="crisis-nav">
+    <div class="crisis-nav-label">JUMP TO</div>
+    <button class="crisis-btn" onclick="jumpTo(2008,10)">2008 · GFC
+      <span class="ttip"><b>Global Financial Crisis</b><br>September 2008: Lehman Brothers collapsed, triggering global credit meltdown. Equities, commodities, and copper fell together as correlations spiked.</span>
+    </button>
+    <button class="crisis-btn" onclick="jumpTo(2020,4)">2020 · COVID
+      <span class="ttip"><b>COVID-19 Pandemic Crash</b><br>March–April 2020: Global lockdowns shut down economic activity. Oil futures went negative, equities fell rapidly, gold rallied as the safe haven.</span>
+    </button>
+    <button class="crisis-btn" onclick="jumpTo(2022,6)">2022 · RATES
+      <span class="ttip"><b>Fed Rate Hike Shock</b><br>2022: Aggressive Federal Reserve rate hikes to fight inflation. Rare year where stocks AND bonds fell together. Commodities surged on supply shock.</span>
+    </button>
+  </div>
+
   <div id="timeline-col">
-    <!-- Fixed crisis nav at top -->
-    <div id="crisis-nav">
-      <div class="crisis-nav-label">JUMP TO</div>
-      <button class="crisis-btn" onclick="jumpTo(2008,10)">2008 · GFC
-        <span class="ttip"><b>Global Financial Crisis</b><br>September 2008: Lehman Brothers collapsed, triggering global mortgage and credit meltdown. Equities, commodities, and copper all fell together as correlations spiked toward +1.</span>
-      </button>
-      <button class="crisis-btn" onclick="jumpTo(2020,4)">2020 · COVID
-        <span class="ttip"><b>COVID-19 Pandemic Crash</b><br>March–April 2020: global lockdowns shut down economic activity. Oil futures briefly went negative, equities fell 34% in a month, gold rallied as the safe haven.</span>
-      </button>
-      <button class="crisis-btn" onclick="jumpTo(2022,6)">2022 · RATES
-        <span class="ttip"><b>Fed Rate Hike Shock</b><br>2022: Aggressive Federal Reserve rate hikes to fight 40-year inflation. Rare year where stocks AND bonds fell together. Commodities surged on Russia–Ukraine supply shock.</span>
-      </button>
-    </div>
-    <!-- Scrollable year strip -->
     <div id="timeline-strip">
       <div id="cursor-line"></div>
       <div id="timeline-track"></div>
       <div id="timeline-years"></div>
     </div>
+
   </div>
 
-  <!-- GRAPH -->
   <div id="graph-col">
     <canvas id="topo-canvas"></canvas>
     <svg id="graph-svg"></svg>
-    <div id="scroll-hint">↕ SCROLL TIMELINE  ·  ◉ CLICK NODE FOR DETAILS</div>
+    <div id="scroll-hint">↕ SCROLL ALTIMETER  ·  ◉ CLICK NODE FOR DOSSIER</div>
 
-    <!-- First-time click hint -->
     <div id="click-hint">
       <span class="ch-arrow">◉</span>
-      <span>TIP &nbsp;·&nbsp; CLICK ANY NODE TO INSPECT ITS CORRELATIONS</span>
+      <span>TIP &nbsp;·&nbsp; CLICK ANY NODE TO INSPECT ENTANGLEMENT</span>
     </div>
 
-    <!-- Node click dossier panel -->
     <div id="dossier-panel">
       <div id="dossier-header">
-        <button id="dossier-close" onclick="closeDossier()">✕ CLOSE</button>
+        <button id="dossier-close" onclick="closeDossier()">✕</button>
         <div id="dossier-asset-name">──────</div>
         <div id="dossier-ticker">──────</div>
         <div id="dossier-aval-row">
@@ -437,24 +691,37 @@ body {
       <div id="dossier-body">
         <div class="d-section-label">// CORRELATIONS TO ALL ASSETS</div>
         <div id="dossier-corr-list"></div>
-        <div class="d-section-label">// REGIME CONTEXT</div>
-        <div id="dossier-regime-text" style="font-size:8.5px;color:var(--mid);line-height:1.8"></div>
+
       </div>
       <div id="dossier-footer">
-        <button id="dossier-goto" onclick="leaveToGlobe()">VIEW GEOGRAPHIC DOSSIER →</button>
+        <button class="dossier-btn" onclick="leaveToDossier()">VIEW ASSET DOSSIER →</button>
+        <button class="dossier-btn" onclick="leaveToGlobe()">VIEW GEOGRAPHIC DOSSIER →</button>
       </div>
     </div>
   </div>
 
-  <!-- RIGHT PANEL -->
   <div id="right-panel">
     <div class="rp-section">
-      <div class="rp-label">// ASSETS · AVG COUPLING<span class="info-i">i<span class="ttip">Each asset's mean absolute correlation to the other 7. Bars show the last 8 monthly snapshots. Higher bars = stronger entanglement with the rest of the market.</span></span></div>
+      <div class="rp-label">
+        // ASSETS · AVG COUPLING
+        <span class="info-i" onclick="toggleHelp(event)">i</span>
+      </div>
       <div id="asset-list"></div>
     </div>
     <div id="corr-top">
-      <div class="rp-label">// TOP CORRELATIONS<span class="info-i">i<span class="ttip">The strongest asset pairs right now. Green = moving together, red = moving opposite. Sorted by magnitude.</span></span></div>
+      <div class="rp-label">
+        // TOP CORRELATIONS
+        <span class="info-i" onclick="toggleHelp(event)">i</span>
+      </div>
       <div id="corr-list"></div>
+    </div>
+    <div class="rp-section" id="minimap-section" style="padding:12px 14px;flex-shrink:0;border-top:0.5px solid var(--border);border-bottom:none;" onclick="openTimeNav()">
+      <div id="minimap-open-hint">⊞ CLICK TO OPEN FULL NAVIGATOR</div>
+      <div class="rp-label">// TIME NAVIGATOR</div>
+      <div style="position:relative;height:120px;width:100%;">
+        <canvas id="timeline-minimap"></canvas>
+        <div id="minimap-tooltip"></div>
+      </div></div>
     </div>
   </div>
 
@@ -462,14 +729,13 @@ body {
 
 <div id="footer">
   <span>SRC</span> YAHOO FINANCE · YFINANCE &nbsp;|&nbsp;
-  <span>CORR</span> 63-DAY ROLLING PEARSON &nbsp;|&nbsp;
   <span>VIZ</span> D3.JS FORCE-DIRECTED &nbsp;|&nbsp;
-  <span>EPFL</span> DATA VISUALIZATION 2025
+  <span>EPFL</span> DATA VISUALIZATION 2026
 </div>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   DATA GLOBALS  (filled by fetch)
+   DATA GLOBALS
 ══════════════════════════════════════════════════════════════════ */
 let ASSETS = [], CORR_DATA = {}, TIMELINE_KEYS = [];
 
@@ -479,22 +745,12 @@ const TICKERS = ['CL=F','DX-Y.NYB','GC=F','HG=F','SI=F','ZC=F','ZW=F','^GSPC'];
 const COLORS  = ['#FF8C1A','#5BB0FF','#FFD93D','#FF6B3D','#D6D6D6','#9CE53F','#3BD9A6','#B8A4FF'];
 
 const CRISIS_YEARS = new Set([2001,2002,2008,2020,2022]);
-const WAYPOINTS = [
-  { year:2008, month:10, label:'GFC',   tag:'LEHMAN COLLAPSE'  },
-  { year:2020, month: 4, label:'COVID', tag:'PANDEMIC CRASH'   },
-  { year:2022, month: 6, label:'2022',  tag:'RATE HIKE SHOCK'  },
-];
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════════════════════════════ */
 function getCorr(key, i, j) { const m=CORR_DATA[key]; return m ? m[i][j] : 0; }
-
-function nearestKey(str) {
-  let best = TIMELINE_KEYS[0];
-  for (const k of TIMELINE_KEYS) { if (k <= str) best = k; }
-  return best;
-}
+function nearestKey(str) { let best = TIMELINE_KEYS[0]; for (const k of TIMELINE_KEYS) { if (k <= str) best = k; } return best; }
 function monthToStr(yr, mo) { return `${yr}-${String(mo+1).padStart(2,'0')}`; }
 
 function getRegime(key) {
@@ -502,7 +758,6 @@ function getRegime(key) {
   let s=0,n=0;
   for (let i=0;i<8;i++) for (let j=i+1;j<8;j++) { s+=Math.abs(m[i][j]); n++; }
   const avg = s/n;
-  // Lowered thresholds (was 0.45 / 0.30) so brief shocks like COVID-Apr-2020 register
   return avg>0.35 ? 'crisis' : avg>0.22 ? 'stress' : 'stable';
 }
 
@@ -512,8 +767,6 @@ function getRegime(key) {
 let currentMonthIdx = 98;
 const TOTAL_MONTHS  = 26 * 12;
 let lastRegime = 'stable';
-// Per-asset sparkline history (last 8 snapshots of mean abs corr)
-const sparkHistory = Array.from({length:8}, ()=>[]);
 
 function idxToDate(idx) {
   const year = 2000 + Math.floor(idx/12), month = idx%12;
@@ -533,27 +786,42 @@ fetch('correlation_data.json')
   })
   .catch(err => {
     document.body.innerHTML =
-      `<div style="color:#ff4444;font-family:monospace;padding:40px;line-height:2">
-        ERROR loading correlation_data.json<br>
+      `<div style="color:#ff4444;font-family:monospace;padding:40px;line-height:2;background:#000;height:100vh;">
+        [CRITICAL ERROR] correlation_data.json FAILED TO LOAD<br>
         ${err.message}<br><br>
-        Run <code>python compute_correlations.py</code> then serve with<br>
-        <code>python -m http.server</code> and open <code>http://localhost:8000</code>
+        Verify data source connectivity and ensure local server is running on port 8000.
       </div>`;
   });
 
 /* ═══════════════════════════════════════════════════════════════
-   TIMELINE BUILD
+   TIMELINE ALTIMETER
 ══════════════════════════════════════════════════════════════════ */
 const TICK_H = 38;
 
 function buildTimeline() {
+  // Compute dominant regime per year from loaded data
+  const yearRegime = {};
+  for (let y = 2000; y <= 2025; y++) {
+    let hasCrisis = false, hasStress = false;
+    for (let m = 1; m <= 12; m++) {
+      const k = `${y}-${String(m).padStart(2,'0')}`;
+      const r = getRegime(nearestKey(k));
+      if (r === 'crisis') hasCrisis = true;
+      else if (r === 'stress') hasStress = true;
+    }
+    yearRegime[y] = hasCrisis ? 'crisis' : hasStress ? 'stress' : 'stable';
+  }
+
   const el = document.getElementById('timeline-years');
-  for (let y=2000; y<=2025; y++) {
+  for (let y = 2000; y <= 2026; y++) {
     const div = document.createElement('div');
     div.className = 'year-tick' + (CRISIS_YEARS.has(y) ? ' crisis' : '');
     div.id = `tick-${y}`;
+    div.style.position = 'relative';
     div.textContent = y;
-    div.onclick = () => jumpTo(y, 6); // jump to mid-year
+    div.onclick = () => jumpTo(y, 6);
+
+
     el.appendChild(div);
   }
 }
@@ -565,14 +833,12 @@ function updateTimeline(year) {
     el.classList.add('active');
     const stripH = document.getElementById('timeline-strip').clientHeight;
     const offset = (year-2000)*TICK_H;
-    document.getElementById('timeline-years').style.transform =
-      `translateY(${stripH/2 - offset - TICK_H/2}px)`;
+    document.getElementById('timeline-years').style.transform = `translateY(${stripH/2 - offset - TICK_H/2}px)`;
   }
 }
 
 function jumpTo(year, month) {
   const targetIdx = (year-2000)*12 + (month-1);
-  // Animated scroll
   const startIdx = currentMonthIdx;
   const diff = targetIdx - startIdx;
   const steps = 24;
@@ -606,15 +872,11 @@ function initTopo() {
 function drawTopo(nodes) {
   if (!topoCtx) return;
   topoCtx.clearRect(0,0,topoW,topoH);
-
-  // Centroid of all nodes
   const cx = d3.mean(nodes, d=>d.x);
   const cy = d3.mean(nodes, d=>d.y);
-
-  const crisis   = avgCorrGlobal > 0.45;
-  const stressed = avgCorrGlobal > 0.3;
-  const spacing  = crisis ? 18 : stressed ? 28 : 42;
-  const maxR     = Math.max(topoW, topoH) * 0.7;
+  const crisis = avgCorrGlobal > 0.45, stressed = avgCorrGlobal > 0.3;
+  const spacing = crisis ? 18 : stressed ? 28 : 42;
+  const maxR = Math.max(topoW, topoH) * 0.7;
   const baseAlpha = crisis ? 0.045 : stressed ? 0.028 : 0.016;
   const lineColor = crisis ? '255,51,51' : stressed ? '255,165,0' : '57,255,20';
 
@@ -640,150 +902,162 @@ function resize() {
   svg.attr('width',W).attr('height',H);
 }
 
-let nodes, links, linkEls, nodeEls, simulation;
+let nodes, links, linkElsBase, linkElsFlow, linkElsHover, nodeEls, simulation;
 
 function initGraph() {
   resize();
-
   nodes = ASSETS.map((a,i) => ({
     id:i, name:a, label:LABELS[i], ticker:TICKERS[i], color:COLORS[i],
-    x: W/2 + Math.cos(i/8*2*Math.PI)*180,
-    y: H/2 + Math.sin(i/8*2*Math.PI)*180,
-    aval: 0.3,
+    x: W/2 + Math.cos(i/8*2*Math.PI)*180, y: H/2 + Math.sin(i/8*2*Math.PI)*180, aval: 0.3
   }));
-
   links = [];
-  for (let i=0;i<8;i++)
-    for (let j=i+1;j<8;j++)
-      links.push({source:i, target:j, corr:0});
+  for (let i=0;i<8;i++) for (let j=i+1;j<8;j++) links.push({source:i, target:j, corr:0});
 
-  // ── DEFS ────────────────────────────────────────────────────────
   const defs = svg.append('defs');
+  
+  // High-tech glow filters for links
+  const posF = defs.append('filter').attr('id','link-glow-pos').attr('x','-40%').attr('y','-40%').attr('width','180%').attr('height','180%');
+  posF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','3').attr('result','b');
+  const pm = posF.append('feMerge'); pm.append('feMergeNode').attr('in','b'); pm.append('feMergeNode').attr('in','SourceGraphic');
 
-  // Per-asset radial gradients for 3D glass nodes
+  const negF = defs.append('filter').attr('id','link-glow-neg').attr('x','-40%').attr('y','-40%').attr('width','180%').attr('height','180%');
+  negF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','3').attr('result','b');
+  const nm = negF.append('feMerge'); nm.append('feMergeNode').attr('in','b'); nm.append('feMergeNode').attr('in','SourceGraphic');
+
+  // ── HIGH-END GLASS ORB GRADIENTS ──
   ASSETS.forEach((_, i) => {
-    const col = COLORS[i];
-    const hex = col.replace('#','');
-    const r = parseInt(hex.slice(0,2),16),
-          g = parseInt(hex.slice(2,4),16),
-          b = parseInt(hex.slice(4,6),16);
-    // Bottom shadow tone — darken the asset color
-    const dark = `rgb(${Math.round(r*0.25)},${Math.round(g*0.25)},${Math.round(b*0.25)})`;
+    const col  = COLORS[i];
+    const cObj = d3.color(col);
 
-    const grad = defs.append('radialGradient')
-      .attr('id',`ng-${i}`)
-      .attr('cx','32%').attr('cy','28%').attr('r','75%');
-    grad.append('stop').attr('offset','0%')
-      .attr('stop-color','#ffffff').attr('stop-opacity','1');
-    grad.append('stop').attr('offset','18%')
-      .attr('stop-color','#ffffff').attr('stop-opacity','0.55');
-    grad.append('stop').attr('offset','45%')
-      .attr('stop-color',col).attr('stop-opacity','1');
-    grad.append('stop').attr('offset','80%')
-      .attr('stop-color',col).attr('stop-opacity','0.92');
-    grad.append('stop').attr('offset','100%')
-      .attr('stop-color',dark).attr('stop-opacity','0.85');
+    // 1. Base — true 3D sphere: bright lit face, deep dark edge
+    const baseGrad = defs.append('radialGradient').attr('id',`orb-base-${i}`)
+      .attr('cx','38%').attr('cy','33%').attr('r','70%');
+    baseGrad.append('stop').attr('offset','0%').attr('stop-color', cObj.brighter(0.6));
+    baseGrad.append('stop').attr('offset','42%').attr('stop-color', col);
+    baseGrad.append('stop').attr('offset','78%').attr('stop-color', cObj.darker(1.8));
+    baseGrad.append('stop').attr('offset','100%').attr('stop-color', cObj.darker(3.8));
 
-    // Glow filter
-    const f = defs.append('filter').attr('id',`gf-${i}`)
+    // 2. Primary specular — sharp glass highlight top-left
+    const glossGrad = defs.append('radialGradient').attr('id',`orb-gloss-${i}`)
+      .attr('cx','26%').attr('cy','21%').attr('r','36%');
+    glossGrad.append('stop').attr('offset','0%').attr('stop-color','#ffffff').attr('stop-opacity','0.90');
+    glossGrad.append('stop').attr('offset','55%').attr('stop-color','#ffffff').attr('stop-opacity','0.12');
+    glossGrad.append('stop').attr('offset','100%').attr('stop-color','#ffffff').attr('stop-opacity','0');
+
+    // 3. Rim light — bottom-right edge catch (3D depth)
+    const rimGrad = defs.append('radialGradient').attr('id',`orb-rim-${i}`)
+      .attr('cx','74%').attr('cy','74%').attr('r','38%');
+    rimGrad.append('stop').attr('offset','0%').attr('stop-color', cObj.brighter(2.5)).attr('stop-opacity','0.55');
+    rimGrad.append('stop').attr('offset','100%').attr('stop-color', col).attr('stop-opacity','0');
+
+    // 4. Per-node soft glow filter
+    const gf = defs.append('filter').attr('id',`orb-glow-${i}`)
       .attr('x','-80%').attr('y','-80%').attr('width','260%').attr('height','260%');
-    f.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','6').attr('result','blur');
-    const m = f.append('feMerge');
-    m.append('feMergeNode').attr('in','blur');
-    m.append('feMergeNode').attr('in','SourceGraphic');
+    const fgb = gf.append('feGaussianBlur').attr('stdDeviation','7').attr('result','blur');
+    const fgm = gf.append('feMerge');
+    fgm.append('feMergeNode').attr('in','blur');
+    fgm.append('feMergeNode').attr('in','SourceGraphic');
   });
 
-  // Green glow filter for positive links
-  const posF = defs.append('filter').attr('id','link-glow-pos')
-    .attr('x','-40%').attr('y','-40%').attr('width','180%').attr('height','180%');
-  posF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','2').attr('result','b');
-  const pm = posF.append('feMerge');
-  pm.append('feMergeNode').attr('in','b');
-  pm.append('feMergeNode').attr('in','SourceGraphic');
-
-  // Red glow filter for negative links
-  const negF = defs.append('filter').attr('id','link-glow-neg')
-    .attr('x','-40%').attr('y','-40%').attr('width','180%').attr('height','180%');
-  negF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','1.8').attr('result','b');
-  const nm = negF.append('feMerge');
-  nm.append('feMergeNode').attr('in','b');
-  nm.append('feMergeNode').attr('in','SourceGraphic');
-
-  // ── LAYERS ──────────────────────────────────────────────────────
   const linkGroup = svg.append('g').attr('class','links');
   const nodeGroup = svg.append('g').attr('class','nodes');
 
-  // Links as quadratic bezier paths
-  linkEls = linkGroup.selectAll('.link').data(links).enter()
-    .append('path').attr('class','link');
+  linkElsBase  = linkGroup.selectAll('.link-base').data(links).enter().append('path').attr('class','link-base');
+  linkElsFlow  = linkGroup.selectAll('.link-flow').data(links).enter().append('path').attr('class','link-flow');
+  linkElsHover = linkGroup.selectAll('.link-hover').data(links).enter().append('path')
+    .attr('class','link-hover').attr('fill','none').attr('stroke','transparent')
+    .attr('stroke-width', 14).style('cursor','crosshair')
+    .on('mouseenter', function(event, d) {
+      const si = d.source.id !== undefined ? d.source.id : d.source;
+      const ti = d.target.id !== undefined ? d.target.id : d.target;
+      const abs = Math.abs(d.corr);
+      if (abs <= 0.35) return;
+      const tt = document.getElementById('link-tooltip');
+      const col = d.corr > 0 ? '#39ff14' : '#ff3333';
+      tt.innerHTML = `<span style="color:${COLORS[si]};font-weight:bold">${SHORT[si]}</span><span style="color:rgba(255,255,255,0.35)"> × </span><span style="color:${COLORS[ti]};font-weight:bold">${SHORT[ti]}</span><br><span style="color:${col};font-size:14px;font-weight:bold">${d.corr>0?'+':''}${d.corr.toFixed(2)}</span>`;
+      tt.style.display = 'block';
+      tt.style.left = (event.clientX + 14) + 'px';
+      tt.style.top  = (event.clientY - 52) + 'px';
+    })
+    .on('mousemove', function(event) {
+      const tt = document.getElementById('link-tooltip');
+      tt.style.left = (event.clientX + 14) + 'px';
+      tt.style.top  = (event.clientY - 52) + 'px';
+    })
+    .on('mouseleave', () => { document.getElementById('link-tooltip').style.display = 'none'; });
+  
+  nodeEls = nodeGroup.selectAll('.node-group').data(nodes).enter().append('g').attr('class','node-group');
 
-  // Nodes
-  nodeEls = nodeGroup.selectAll('.node-group').data(nodes).enter()
-    .append('g').attr('class','node-group');
+  // ── HIGH-END ORB ASSEMBLY ──
 
-  // Outer pulse halo (radius animated in JS loop)
-  nodeEls.append('circle').attr('class','pulse-halo')
-    .attr('r',28).attr('fill',d=>d.color).attr('opacity',0);
+  // 0. Breathing glow halo (behind everything, enables CSS animation)
+  nodeEls.append('circle')
+    .attr('class', 'orb-glow')
+    .attr('r', 26)
+    .attr('fill', d => COLORS[d.id])
+    .attr('opacity', 0.13)
+    .style('filter', d => `blur(9px)`);
 
-  // Mid glow
-  nodeEls.append('circle').attr('class','mid-glow')
-    .attr('r',18).attr('fill',d=>d.color).attr('opacity',0.07)
-    .attr('filter',d=>`url(#gf-${d.id})`);
+  // 1. Deep drop shadow
+  nodeEls.append('circle')
+    .attr('class', 'orb-layer')
+    .attr('r', 16)
+    .attr('fill', 'rgba(0,0,0,0.85)')
+    .attr('cy', 6)
+    .style('filter', 'blur(6px)');
 
-  // Outer ring
-  nodeEls.append('circle').attr('class','node-ring').attr('r',16)
-    .attr('fill','none').attr('stroke',d=>d.color)
-    .attr('stroke-width',0.6).attr('opacity',0.35);
+  // 2. Base 3D sphere body
+  nodeEls.append('circle')
+    .attr('class', 'orb-layer')
+    .attr('r', 16)
+    .attr('fill', d => `url(#orb-base-${d.id})`);
 
-  // Inner glass sphere
-  nodeEls.append('circle').attr('r',13)
-    .attr('fill',d=>`url(#ng-${d.id})`).attr('opacity',1)
-    .style('filter', d => `drop-shadow(0 0 6px ${d.color})`);
+  // 3. Rim light (bottom-right edge catch)
+  nodeEls.append('circle')
+    .attr('class', 'orb-layer')
+    .attr('r', 16)
+    .attr('fill', d => `url(#orb-rim-${d.id})`);
 
-  // Labels
-  nodeEls.append('text').attr('class','node-label').attr('dy',-22)
-    .text(d=>SHORT[d.id]);
+  // 4. Primary specular highlight (top-left glass reflection)
+  nodeEls.append('circle')
+    .attr('class', 'orb-layer')
+    .attr('r', 16)
+    .attr('fill', d => `url(#orb-gloss-${d.id})`);
 
-  // Click → open dossier (also dismisses the click hint)
-  nodeEls.on('click', (event, d) => {
-    event.stopPropagation();
-    dismissClickHint();
-    openDossier(d);
+  // 5. Tiny secondary hot-spot (sharp pinpoint of light)
+  nodeEls.append('circle')
+    .attr('cx', -5).attr('cy', -6)
+    .attr('r', 2.5)
+    .attr('fill', 'rgba(255,255,255,0.65)')
+    .style('filter', 'blur(0.8px)');
+
+  // 6. Label
+  nodeEls.append('text').attr('class','node-label').attr('dy',-22).text(d=>SHORT[d.id]);
+
+  nodeEls.on('click', (event, d) => { event.stopPropagation(); dismissClickHint(); openDossier(d); });
+  
+  nodeEls.on('mouseenter', function() {
+    // Elevate node on hover
+    d3.select(this).selectAll('.orb-layer').attr('transform', 'scale(1.15)');
+    d3.select(this).select('circle:first-child').style('filter', 'blur(8px)').attr('cy', 8).attr('fill', 'rgba(0,0,0,0.4)');
+  }).on('mouseleave', function() {
+    d3.select(this).selectAll('.orb-layer').attr('transform', 'scale(1)');
+    d3.select(this).select('circle:first-child').style('filter', 'blur(4px)').attr('cy', 4).attr('fill', 'rgba(0,0,0,0.7)');
   });
 
-  // Hover: brighten ring + glow so the interactivity is obvious
-  nodeEls
-    .on('mouseenter', function() {
-      const g = d3.select(this);
-      g.select('.node-ring').attr('opacity', 0.9).attr('stroke-width', 1.8).attr('r', 19);
-      g.select('.mid-glow').attr('opacity', 0.22);
-    })
-    .on('mouseleave', function() {
-      const g = d3.select(this);
-      g.select('.node-ring').attr('opacity', 0.35).attr('stroke-width', 0.6).attr('r', 16);
-      g.select('.mid-glow').attr('opacity', 0.07);
-    });
-
-  // Click on graph background → close dossier
-  svg.on('click', () => closeDossier());
-
-  // Suppress browser default text-selection on double-click (caused a visual bug)
-  svg.on('dblclick', e => { e.preventDefault(); });
+  svg.on('click', closeDossier);
+  svg.on('dblclick', e => e.preventDefault());
   svg.on('mousedown', e => { if (e.detail > 1) e.preventDefault(); });
 
-  // ── SIMULATION ──────────────────────────────────────────────────
   simulation = d3.forceSimulation(nodes)
     .force('charge', d3.forceManyBody().strength(-100))
     .force('center', d3.forceCenter(W/2, H/2))
-    .force('collision', d3.forceCollide(32))
-    .force('link', d3.forceLink(links).id(d=>d.id)
-      .strength(d=>Math.abs(d.corr)*0.6)
-      .distance(d=>{
-        const c=Math.abs(d.corr);
-        if(c>0.6) return 80; if(c>0.3) return 145; if(c>0.1) return 210; return 290;
-      }))
-    .alphaDecay(0.02)
-    .on('tick', onTick);
+    .force('collision', d3.forceCollide(38))
+    .force('link', d3.forceLink(links).id(d=>d.id).strength(d=>Math.abs(d.corr)*0.6).distance(d=>{
+      const c=Math.abs(d.corr);
+      if(c>0.6) return 90; if(c>0.3) return 155; if(c>0.1) return 230; return 300;
+    }))
+    .alphaDecay(0.02).on('tick', onTick);
 
   window.addEventListener('resize', ()=>{
     resize(); initTopo();
@@ -791,196 +1065,188 @@ function initGraph() {
   });
 }
 
-/* Quadratic bezier path with perpendicular curve */
 function curvePath(d) {
-  const sx = d.source.x||0, sy = d.source.y||0;
-  const tx = d.target.x||0, ty = d.target.y||0;
-  const mx = (sx+tx)/2, my = (sy+ty)/2;
-  const dx = tx-sx, dy = ty-sy;
+  const sx = d.source.x||0, sy = d.source.y||0, tx = d.target.x||0, ty = d.target.y||0;
+  const mx = (sx+tx)/2, my = (sy+ty)/2, dx = tx-sx, dy = ty-sy;
   const len = Math.sqrt(dx*dx+dy*dy) || 1;
-  // Positive corr curves left, negative curves right — different visual lane
   const off = len * 0.12 * (d.corr > 0 ? 1 : -1);
-  const cpx = mx - (dy/len)*off;
-  const cpy = my + (dx/len)*off;
-  return `M${sx},${sy} Q${cpx},${cpy} ${tx},${ty}`;
+  return `M${sx},${sy} Q${mx - (dy/len)*off},${my + (dx/len)*off} ${tx},${ty}`;
 }
 
-let _animT = 0;
 function onTick() {
-  _animT = Date.now()/1000;
-
-  linkEls.attr('d', curvePath);
-
-  nodeEls.attr('transform', d =>
-    `translate(${Math.max(20,Math.min(W-20,d.x||0))},${Math.max(20,Math.min(H-20,d.y||0))})`
-  );
-
-  // Pulse halo — driven by per-node aval (avg entanglement)
-  nodeEls.select('.pulse-halo').attr('r', d => {
-    const base = 18 + d.aval * 16;
-    const pulse = Math.sin(_animT * (1 + d.aval * 2) + d.id * 0.8) * 4;
-    return base + pulse;
-  }).attr('opacity', d => d.aval * 0.12 + 0.02);
-
+  linkElsBase.attr('d', curvePath);
+  linkElsFlow.attr('d', curvePath);
+  if (linkElsHover) linkElsHover.attr('d', curvePath);
+  
+  nodeEls.attr('transform', d => `translate(${Math.max(24,Math.min(W-24,d.x||0))},${Math.max(24,Math.min(H-24,d.y||0))})`);
   drawTopo(nodes);
+
+  if (activeDossierNode) {
+    const panel = document.getElementById('dossier-panel');
+    const nx = activeDossierNode.x;
+    const ny = activeDossierNode.y;
+    panel.style.left = Math.min(W - 280, Math.max(20, nx + 25)) + 'px';
+    panel.style.top  = Math.min(H - panel.offsetHeight - 20, Math.max(20, ny + 25)) + 'px';
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ASSET LIST + SPARKLINES
+   DATA BINDING
 ══════════════════════════════════════════════════════════════════ */
 function buildAssetList() {
   const el = document.getElementById('asset-list');
   el.innerHTML = '';
   nodes.forEach(n => {
-    const row = document.createElement('div');
+    const row = document.createElement('div'); 
     row.className = 'asset-row';
+    
+    row.onclick = () => { dismissClickHint(); openDossier(n); };
+    
     row.innerHTML = `
       <span class="asset-dot" style="background:${n.color};box-shadow:0 0 4px ${n.color}"></span>
-      <span style="font-size:11px;color:var(--mid);font-weight:500">${SHORT[n.id]}</span>
-      <div class="sparkline-wrap" id="spark-${n.id}">
-        ${Array(8).fill(0).map((_,k)=>
-          `<div class="spark-bar" id="sb-${n.id}-${k}" style="height:4px;background:${n.color};opacity:0.3"></div>`
-        ).join('')}
-      </div>`;
+      <span style="font-weight:bold;width:55px;letter-spacing:0.05em;">${SHORT[n.id]}</span>
+      <div class="asset-gauge-wrap">
+        <div class="asset-gauge-fill" id="ag-${n.id}" style="width:0%;background:${n.color};opacity:0.8"></div>
+      </div>
+    `;
     el.appendChild(row);
   });
 }
 
 function updateSparklines(key) {
   nodes.forEach((n,i) => {
-    // Compute mean abs corr for this asset
-    let s=0;
-    for(let j=0;j<8;j++) if(j!==i) s+=Math.abs(getCorr(key,i,j));
+    let s=0; for(let j=0;j<8;j++) if(j!==i) s+=Math.abs(getCorr(key,i,j));
     const val = s/7;
-
-    // Push to history (cap at 8)
-    sparkHistory[i].push(val);
-    if(sparkHistory[i].length>8) sparkHistory[i].shift();
-
-    // Update bars
-    const hist = sparkHistory[i];
-    const maxV = Math.max(...hist, 0.01);
-    hist.forEach((v,k) => {
-      const bar = document.getElementById(`sb-${i}-${k}`);
-      if (!bar) return;
-      const h = Math.max(2, (v/maxV)*14);
-      bar.style.height = h+'px';
-      bar.style.opacity = 0.35 + (v/maxV)*0.55;
-      bar.style.background = v>0.45 ? '#ff3333' : v>0.3 ? '#ffa500' : COLORS[i];
-    });
-
-    // Update per-node aval for pulsing
     n.aval = val;
+    
+    const gauge = document.getElementById(`ag-${n.id}`);
+    if(gauge) {
+      const pct = Math.min(100, (val / 0.65) * 100);
+      gauge.style.width = `${pct}%`;
+      gauge.style.background = val > 0.45 ? '#ff3333' : val > 0.3 ? '#ffa500' : COLORS[i];
+    }
   });
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   LINK VISUAL UPDATE
-══════════════════════════════════════════════════════════════════ */
 function updateLinks(key) {
   links.forEach(l => {
-    const i = l.source.id!==undefined ? l.source.id : l.source;
-    const j = l.target.id!==undefined ? l.target.id : l.target;
+    const i = l.source.id!==undefined ? l.source.id : l.source, j = l.target.id!==undefined ? l.target.id : l.target;
     l.corr = getCorr(key, Math.min(i,j), Math.max(i,j));
   });
-
+  
   const animT = Date.now()/800;
-
-  linkEls.each(function(d) {
-    const sel = d3.select(this);
-    const abs = Math.abs(d.corr);
-    const visible = abs > 0.35;
-
-    if (!visible) {
-      sel.attr('stroke','none').attr('stroke-width',0).attr('opacity',0);
-      return;
-    }
-
-    if (d.corr > 0) {
-      // Positive: glowing green animated dash — "data packets"
-      const dashLen = 14, gapLen = Math.max(4, 22*(1-abs));
-      const total = dashLen + gapLen;
-      const offset = -(animT * abs * 28) % total;
-      sel
-        .attr('stroke','#39ff14')
-        .attr('stroke-width', abs*3.5)
-        .attr('opacity', abs*0.9)
-        .attr('stroke-dasharray',`${dashLen},${gapLen}`)
-        .attr('stroke-dashoffset', offset)
-        .attr('filter','url(#link-glow-pos)');
-    } else {
-      // Negative: red animated short dashes — "fracturing tension"
-      const dashLen = 4, gapLen = 5;
-      const total = dashLen + gapLen;
-      const offset = -(animT * abs * 18) % total;
-      sel
-        .attr('stroke','#ff4d4d')
-        .attr('stroke-width', abs*2.8)
-        .attr('opacity', abs*0.85)
-        .attr('stroke-dasharray',`${dashLen},${gapLen}`)
-        .attr('stroke-dashoffset', offset)
-        .attr('filter','url(#link-glow-neg)');
-    }
+  
+  linkElsBase.each(function(d) {
+    const sel = d3.select(this), abs = Math.abs(d.corr);
+    if (abs <= 0.35) { sel.attr('stroke','none'); return; }
+    sel.attr('stroke', d.corr > 0 ? '#39ff14' : '#ff4d4d')
+       .attr('stroke-width', abs * 4)
+       .attr('opacity', abs * 0.4)
+       .attr('filter', d.corr > 0 ? 'url(#link-glow-pos)' : 'url(#link-glow-neg)');
   });
+
+  linkElsFlow.each(function(d) {
+    const sel = d3.select(this), abs = Math.abs(d.corr);
+    if (abs <= 0.35) { sel.attr('stroke','none'); return; }
+    sel.attr('stroke','#ffffff')
+       .attr('stroke-width', abs * 1.5)
+       .attr('opacity', abs * 0.8)
+       .attr('stroke-dasharray', '2 6')
+       .attr('stroke-dashoffset', -(animT * abs * 50) % 8)
+       .attr('stroke-linecap', 'round');
+  });
+
+  // Update hover hitbox visibility
+  if (linkElsHover) {
+    linkElsHover.each(function(d) {
+      d3.select(this).attr('stroke', Math.abs(d.corr) > 0.35 ? 'transparent' : 'none');
+    });
+  }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   CORR LIST
-══════════════════════════════════════════════════════════════════ */
 function updateCorrList(key) {
-  const pairs=[];
-  for(let i=0;i<8;i++) for(let j=i+1;j<8;j++)
-    pairs.push({i,j,c:getCorr(key,i,j)});
+  const pairs=[]; for(let i=0;i<8;i++) for(let j=i+1;j<8;j++) pairs.push({i,j,c:getCorr(key,i,j)});
   pairs.sort((a,b)=>Math.abs(b.c)-Math.abs(a.c));
-
-  const el = document.getElementById('corr-list');
-  el.innerHTML='';
+  const el = document.getElementById('corr-list'); el.innerHTML='';
   pairs.slice(0,7).forEach(p=>{
-    const row = document.createElement('div');
+    const row = document.createElement('div'), cls = p.c>0 ? 'corr-pos' : 'corr-neg', barW = Math.abs(p.c)*100, barCol = p.c>0 ? '#39ff14' : '#ff3333';
     row.className='corr-row';
-    const cls = p.c>0 ? 'corr-pos' : 'corr-neg';
-    const barW = Math.abs(p.c)*100;
-    const barCol = p.c>0 ? '#39ff14' : '#ff3333';
-    row.innerHTML=`
-      <div style="flex:1">
-        <div class="corr-pair">${SHORT[p.i]} × ${SHORT[p.j]}</div>
-        <div class="corr-bar-bg"><div class="corr-bar-fill" style="width:${barW}%;background:${barCol};opacity:0.6"></div></div>
-      </div>
-      <span class="${cls}" style="font-size:9px;margin-left:6px">${p.c>0?'+':''}${p.c.toFixed(2)}</span>`;
+    row.innerHTML=`<div style="flex:1"><div class="corr-pair">${SHORT[p.i]} × ${SHORT[p.j]}</div><div class="corr-bar-bg"><div class="corr-bar-fill" style="width:${barW}%;background:${barCol};opacity:0.6"></div></div></div><span class="${cls}">${p.c>0?'+':''}${p.c.toFixed(2)}</span>`;
     el.appendChild(row);
   });
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   REGIME + GLITCH
-══════════════════════════════════════════════════════════════════ */
 function updateRegime(regime) {
-  const regEl = document.getElementById('regime-label');
-  const logo  = document.querySelector('.logo');
+  const regEl  = document.getElementById('regime-label');
+  const logo   = document.querySelector('.logo');
+  const panel  = document.getElementById('dossier-panel');
+  const svgEl  = document.getElementById('graph-svg');
+  const pulse  = document.getElementById('crisis-pulse');
 
-  // Glitch trigger on crossing into crisis
   if (regime === 'crisis' && lastRegime !== 'crisis') {
-    regEl.classList.add('glitch-label');
-    logo.classList.add('glitch-active');
+    // Glitch text + logo
+    regEl.classList.add('glitch-label'); logo.classList.add('glitch-active');
     setTimeout(()=>{ regEl.classList.remove('glitch-label'); logo.classList.remove('glitch-active'); }, 600);
-    document.body.style.transition = 'box-shadow 0.3s';
-    document.body.style.boxShadow  = 'inset 0 0 80px rgba(255,0,0,0.06)';
-  } else if (regime !== 'crisis') {
-    document.body.style.boxShadow = 'none';
+    // Full-screen red radial pulse
+    if (pulse) {
+      pulse.classList.remove('crisis-flash');
+      void pulse.offsetWidth; // reflow to restart animation
+      pulse.classList.add('crisis-flash');
+    }
   }
+
   lastRegime = regime;
-
   regEl.className = 'regime-label';
-  if (regime==='crisis')  { regEl.textContent='SYSTEMIC SHOCK'; regEl.classList.add('regime-crisis'); }
-  else if (regime==='stress') { regEl.textContent='ELEVATED STRESS'; regEl.classList.add('regime-stress'); }
-  else { regEl.textContent='STABLE'; regEl.classList.add('regime-stable'); }
 
-  // Recompute global avg corr for topo
+  // Regime badge
+  if (regime === 'crisis') {
+    regEl.textContent = 'SYSTEMIC SHOCK'; regEl.classList.add('regime-crisis');
+  } else if (regime === 'stress') {
+    regEl.textContent = 'ELEVATED STRESS'; regEl.classList.add('regime-stress');
+  } else {
+    regEl.textContent = 'STABLE'; regEl.classList.add('regime-stable');
+  }
+
+  // Dossier panel border reacts to regime
+  if (panel) {
+    if (regime === 'crisis') {
+      panel.style.borderColor = 'rgba(255,51,51,0.65)';
+      panel.style.boxShadow   = '0 0 30px rgba(255,51,51,0.2), 0 10px 30px rgba(0,0,0,0.8)';
+    } else if (regime === 'stress') {
+      panel.style.borderColor = 'rgba(255,165,0,0.55)';
+      panel.style.boxShadow   = '0 0 30px rgba(255,165,0,0.15), 0 10px 30px rgba(0,0,0,0.8)';
+    } else {
+      panel.style.borderColor = 'rgba(57,255,20,0.4)';
+      panel.style.boxShadow   = '0 0 30px rgba(57,255,20,0.15), 0 10px 30px rgba(0,0,0,0.8)';
+    }
+  }
+
+  // Date display color changes with regime
+  const dateEl = document.getElementById('date-display');
+  if (dateEl) {
+    if (regime === 'crisis') {
+      dateEl.style.color      = '#ff3333';
+      dateEl.style.textShadow = '0 0 14px rgba(255,51,51,0.55)';
+    } else if (regime === 'stress') {
+      dateEl.style.color      = '#ffa500';
+      dateEl.style.textShadow = '0 0 14px rgba(255,165,0,0.5)';
+    } else {
+      dateEl.style.color      = 'var(--green)';
+      dateEl.style.textShadow = '0 0 12px rgba(57,255,20,0.4)';
+    }
+  }
+
+  // Orb breathing speed via SVG class
+  if (svgEl) {
+    svgEl.classList.remove('crisis-regime','stress-regime','stable-regime');
+    svgEl.classList.add(`${regime}-regime`);
+  }
+
   avgCorrGlobal = regime==='crisis' ? 0.6 : regime==='stress' ? 0.35 : 0.15;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   NODE DOSSIER
+   DYNAMIC DOSSIER
 ══════════════════════════════════════════════════════════════════ */
 let activeDossierNode = null;
 
@@ -989,120 +1255,90 @@ function openDossier(node) {
   const key = nearestKey(idxToDate(currentMonthIdx).str);
   const panel = document.getElementById('dossier-panel');
 
-  // Header
   document.getElementById('dossier-asset-name').textContent = node.label;
   document.getElementById('dossier-asset-name').style.color = node.color;
   document.getElementById('dossier-ticker').textContent = node.ticker;
 
-  // Avg coupling
-  let s=0;
-  for(let j=0;j<8;j++) if(j!==node.id) s+=Math.abs(getCorr(key,node.id,j));
+  let s=0; for(let j=0;j<8;j++) if(j!==node.id) s+=Math.abs(getCorr(key,node.id,j));
   const aval = s/7;
   const avalEl = document.getElementById('dossier-aval-num');
   avalEl.textContent = aval.toFixed(2);
   avalEl.style.color = aval>0.45 ? '#ff3333' : aval>0.3 ? '#ffa500' : '#39ff14';
 
-  // Correlation list — all 7 other assets, sorted by abs value
-  const others = ASSETS.map((_,j) => ({
-    j, c: j===node.id ? null : getCorr(key,node.id,j)
-  })).filter(x=>x.c!==null).sort((a,b)=>Math.abs(b.c)-Math.abs(a.c));
-
+  const others = ASSETS.map((_,j) => ({ j, c: j===node.id ? null : getCorr(key,node.id,j) })).filter(x=>x.c!==null).sort((a,b)=>Math.abs(b.c)-Math.abs(a.c));
   const listEl = document.getElementById('dossier-corr-list');
   listEl.innerHTML = '';
   others.forEach(({j,c}) => {
-    const abs = Math.abs(c);
-    const col  = c>0 ? '#39ff14' : '#ff3333';
-    const barW = abs*100;
-    const row  = document.createElement('div');
-    row.className = 'd-corr-row';
-    row.innerHTML = `
-      <div class="d-corr-dot" style="background:${COLORS[j]}"></div>
-      <div class="d-corr-name">${SHORT[j]}</div>
-      <div class="d-corr-bar-bg">
-        <div class="d-corr-bar-fill" style="width:${barW}%;background:${col};opacity:0.7"></div>
-      </div>
-      <div class="d-corr-val" style="color:${col}">${c>0?'+':''}${c.toFixed(2)}</div>`;
+    const abs = Math.abs(c), col = c>0 ? '#39ff14' : '#ff3333', barW = abs*100;
+    const row = document.createElement('div'); row.className = 'd-corr-row';
+    row.innerHTML = `<div class="d-corr-dot" style="background:${COLORS[j]}"></div><div class="d-corr-name">${SHORT[j]}</div><div class="d-corr-bar-bg"><div class="d-corr-bar-fill" style="width:${barW}%;background:${col};opacity:0.7"></div></div><div class="d-corr-val" style="color:${col}">${c>0?'+':''}${c.toFixed(2)}</div>`;
     listEl.appendChild(row);
   });
 
-  // Regime context text
-  const regime = getRegime(key);
-  const regimeTexts = {
-    crisis: `${SHORT[node.id]} is in high systemic coupling territory. Avg correlation ${aval.toFixed(2)}, consistent with crisis clustering where diversification benefits collapse.`,
-    stress: `${SHORT[node.id]} shows elevated coupling (${aval.toFixed(2)}). Market stress is compressing cross-asset correlations above baseline levels.`,
-    stable: `${SHORT[node.id]} avg coupling at ${aval.toFixed(2)}, within normal regime. Correlation structure is diffuse and diversification is effective.`,
-  };
-  document.getElementById('dossier-regime-text').textContent = regimeTexts[regime];
 
-  // Globe link — pass asset id via hash
-  const GLOBE_IDS = ['crude_oil','usd_index','gold','copper','silver','corn','wheat','sp500'];
-  document.getElementById('dossier-goto').href = `globe.html#${GLOBE_IDS[node.id]}`;
-
-  // Highlight selected node
-  nodeEls.select('.pulse-halo').attr('opacity', d => d.id===node.id ? 0.25 : null);
-
+  
+  onTick();
   panel.classList.add('open');
 }
 
-function closeDossier() {
-  document.getElementById('dossier-panel').classList.remove('open');
-  activeDossierNode = null;
-}
+function closeDossier() { document.getElementById('dossier-panel').classList.remove('open'); activeDossierNode = null; }
+function refreshDossier(key) { if(activeDossierNode) openDossier(activeDossierNode); }
 
-function refreshDossier(key) {
-  if (!activeDossierNode) return;
-  openDossier(activeDossierNode); // re-render with new key
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   MAIN UPDATE
-══════════════════════════════════════════════════════════════════ */
 function update(monthIdx) {
   const {year, month, str} = idxToDate(monthIdx);
   const key = nearestKey(str);
-
-  // Persist for round-trip with globe page
-  try { sessionStorage.setItem(SS_KEY_MONTH, String(monthIdx)); } catch(e) {}
-
-  // Human-readable date — "OCT 2008" instead of "2008-10"
+  try { sessionStorage.setItem('mg_currentMonth', String(monthIdx)); } catch(e) {}
+  
   const MONTHS_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   document.getElementById('date-display').textContent = `${MONTHS_ABBR[month]} ${year}`;
-  updateTimeline(year);
-  updateRegime(getRegime(key));
-  updateLinks(key);
-  updateSparklines(key);
-  updateCorrList(key);
-
-  simulation.force('link').links(links).strength(d=>Math.abs(d.corr)*0.6);
-  simulation.alpha(0.45).restart();
+  
+  updateTimeline(year); updateRegime(getRegime(key)); updateLinks(key); updateSparklines(key); updateCorrList(key);
+  simulation.force('link').links(links).strength(d=>Math.abs(d.corr)*0.6); simulation.alpha(0.45).restart();
   refreshDossier(key);
+  drawMinimap();
+  if (document.getElementById("time-nav-overlay").classList.contains("open")) refreshTimeNavCurrent();
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   ANIMATION LOOP  (keeps links animated even when sim is cool)
-══════════════════════════════════════════════════════════════════ */
 let lastKey = null;
 function animLoop() {
   const key = nearestKey(idxToDate(currentMonthIdx).str);
   if (key !== lastKey) { lastKey = key; }
-  updateLinks(key); // re-runs dashoffset each frame
+  updateLinks(key);
+  // Gently oscillate topo ring alpha for idle life
+  const t = Date.now() / 1000;
+  const breathe = 0.85 + 0.15 * Math.sin(t * 0.6);
+  if (topoCtx && nodes) drawTopoBreathing(nodes, breathe);
   requestAnimationFrame(animLoop);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   SCROLL / DRAG
-══════════════════════════════════════════════════════════════════ */
+function drawTopoBreathing(nodes, breatheFactor) {
+  if (!topoCtx) return;
+  topoCtx.clearRect(0, 0, topoW, topoH);
+  const cx = d3.mean(nodes, d => d.x);
+  const cy = d3.mean(nodes, d => d.y);
+  const crisis = avgCorrGlobal > 0.45, stressed = avgCorrGlobal > 0.3;
+  const spacing  = crisis ? 18 : stressed ? 28 : 42;
+  const maxR     = Math.max(topoW, topoH) * 0.7;
+  const baseAlpha = (crisis ? 0.055 : stressed ? 0.035 : 0.02) * breatheFactor;
+  const lineColor = crisis ? '255,51,51' : stressed ? '255,165,0' : '57,255,20';
+  for (let r = spacing; r < maxR; r += spacing) {
+    const alpha = baseAlpha * Math.pow(1 - r / maxR, 0.55);
+    topoCtx.beginPath();
+    topoCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    topoCtx.strokeStyle = `rgba(${lineColor},${alpha})`;
+    topoCtx.lineWidth = crisis ? 0.9 : 0.5;
+    topoCtx.stroke();
+  }
+}
+
 function bindInteraction() {
   let scrollAcc = 0;
   window.addEventListener('wheel', e => {
-    e.preventDefault();
-    scrollAcc += e.deltaY;
+    e.preventDefault(); scrollAcc += e.deltaY;
     if (Math.abs(scrollAcc) >= 35) {
-      const d = Math.sign(scrollAcc);
-      scrollAcc = 0;
+      const d = Math.sign(scrollAcc); scrollAcc = 0;
       currentMonthIdx = Math.max(0, Math.min(TOTAL_MONTHS-1, currentMonthIdx+d));
-      update(currentMonthIdx);
-      document.getElementById('scroll-hint').style.opacity='0';
+      update(currentMonthIdx); document.getElementById('scroll-hint').style.opacity='0';
     }
   }, {passive:false});
 
@@ -1112,90 +1348,336 @@ function bindInteraction() {
   window.addEventListener('mouseup', ()=>{ isDrag=false; });
   window.addEventListener('mousemove', e=>{
     if(!isDrag) return;
-    const delta = -Math.round((e.clientY-dragY0)/2.5);
-    currentMonthIdx = Math.max(0, Math.min(TOTAL_MONTHS-1, dragIdx0+delta));
+    currentMonthIdx = Math.max(0, Math.min(TOTAL_MONTHS-1, dragIdx0 - Math.round((e.clientY-dragY0)/2.5)));
     update(currentMonthIdx);
   });
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   HELP POPOVER
-══════════════════════════════════════════════════════════════════ */
-function toggleHelp() {
-  document.getElementById('help-popover').classList.toggle('open');
+function toggleHelp(event) { 
+  if (event) event.stopPropagation(); 
+  document.getElementById('help-popover').classList.toggle('open'); 
 }
-// Click anywhere else closes it
+
 document.addEventListener('click', e => {
-  const pop = document.getElementById('help-popover');
-  const btn = document.getElementById('help-btn');
-  if (!pop || !btn) return;
-  if (!pop.contains(e.target) && e.target !== btn) pop.classList.remove('open');
+  const pop = document.getElementById('help-popover'), btn = document.getElementById('help-btn');
+  const infoIcons = document.querySelectorAll('.info-i');
+  let clickedIcon = false;
+  infoIcons.forEach(i => { if (i.contains(e.target)) clickedIcon = true; });
+  if (pop && btn && !pop.contains(e.target) && e.target !== btn && !clickedIcon) pop.classList.remove('open');
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   PAGE TRANSITIONS + STATE PERSISTENCE
-══════════════════════════════════════════════════════════════════ */
-const SS_KEY_MONTH = 'mg_currentMonth';
-const SS_KEY_ASSET = 'mg_lastAsset';
 const GLOBE_IDS = ['crude_oil','usd_index','gold','copper','silver','corn','wheat','sp500'];
+function leaveToWelcome() { sessionStorage.removeItem('mg_currentMonth'); sessionStorage.removeItem('mg_lastAsset'); transition('welcome.html'); }
+function leaveToGlobe() { sessionStorage.setItem('mg_currentMonth', String(currentMonthIdx)); if(activeDossierNode) sessionStorage.setItem('mg_lastAsset', GLOBE_IDS[activeDossierNode.id]); transition('globe.html' + (activeDossierNode ? '#' + GLOBE_IDS[activeDossierNode.id] : '')); }
+function leaveToDossier() { sessionStorage.setItem('mg_currentMonth', String(currentMonthIdx)); if(activeDossierNode) sessionStorage.setItem('mg_lastAsset', GLOBE_IDS[activeDossierNode.id]); transition('dossier.html'); }
+function transition(url) { document.getElementById('fade-overlay').classList.remove('gone'); document.getElementById('fade-overlay').classList.add('active'); setTimeout(() => window.location.href = url, 700); }
 
-function leaveToWelcome() {
-  // Clear saved state so welcome doesn't auto-skip
-  sessionStorage.removeItem(SS_KEY_MONTH);
-  sessionStorage.removeItem(SS_KEY_ASSET);
-  const overlay = document.getElementById('fade-overlay');
-  overlay.classList.remove('gone');
-  overlay.classList.add('active');
-  setTimeout(() => { window.location.href = 'welcome.html'; }, 700);
-}
-
-function leaveToGlobe() {
-  // Save state
-  sessionStorage.setItem(SS_KEY_MONTH, String(currentMonthIdx));
-  if (activeDossierNode) {
-    sessionStorage.setItem(SS_KEY_ASSET, GLOBE_IDS[activeDossierNode.id]);
-  }
-  const assetHash = activeDossierNode ? '#' + GLOBE_IDS[activeDossierNode.id] : '';
-
-  const overlay = document.getElementById('fade-overlay');
-  overlay.classList.remove('gone');
-  overlay.classList.add('active');
-  setTimeout(() => { window.location.href = 'globe.html' + assetHash; }, 700);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   BOOT
-══════════════════════════════════════════════════════════════════ */
 function boot() {
-  // Restore last viewed month from sessionStorage (if returning from globe)
-  const savedMonth = sessionStorage.getItem(SS_KEY_MONTH);
-  if (savedMonth !== null) {
-    const n = parseInt(savedMonth, 10);
-    if (!isNaN(n) && n >= 0 && n < TOTAL_MONTHS) currentMonthIdx = n;
-  }
+  const savedMonth = sessionStorage.getItem('mg_currentMonth');
+  if (savedMonth !== null) { const n = parseInt(savedMonth, 10); if (!isNaN(n) && n >= 0 && n < TOTAL_MONTHS) currentMonthIdx = n; }
+  buildTimeline(); initTopo(); initGraph(); buildAssetList(); bindInteraction();
+  initMinimap(); update(currentMonthIdx); animLoop();
 
-  buildTimeline();
-  initTopo();
-  initGraph();
-  buildAssetList();
-  bindInteraction();
-  update(currentMonthIdx);
-  animLoop();
+  // Safe to wire overlay backdrop now — DOM fully ready
+  const overlay = document.getElementById('time-nav-overlay');
+  if (overlay) overlay.addEventListener('click', e => { if (e.target === overlay) closeTimeNav(); });
 
-  // Fade in
   setTimeout(() => document.getElementById('fade-overlay').classList.add('gone'), 50);
-
-  // Auto-dismiss the click-node hint after 6 seconds if user didn't click anything
   setTimeout(dismissClickHint, 6000);
 }
 
-let _hintDismissed = false;
-function dismissClickHint() {
-  if (_hintDismissed) return;
-  _hintDismissed = true;
-  const el = document.getElementById('click-hint');
-  if (el) el.classList.add('hide');
+/* ── MINIMAP ──────────────────────────────────────────────── */
+const MONTHS_ABBR_M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+function initMinimap() {
+  const canvas = document.getElementById('timeline-minimap');
+  if (!canvas) return;
+  const wrap = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = Math.round(wrap.width);
+  canvas.height = Math.round(wrap.height);
+  drawMinimap();
+  bindMinimap(canvas);
 }
+
+function drawMinimap() {
+  const canvas = document.getElementById('timeline-minimap');
+  if (!canvas || !canvas.width) return;
+  const W   = canvas.width;
+  const H   = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  // Layout: 12 months across (columns), 26 years down (rows)
+  const YEARS  = 26;   // 2000-2025
+  const MONTHS = 12;
+  const cellW  = W / MONTHS;
+  const cellH  = H / YEARS;
+
+  for (let y = 0; y < YEARS; y++) {
+    for (let m = 0; m < MONTHS; m++) {
+      const idx = y * 12 + m;
+      if (idx >= TOTAL_MONTHS) break;
+      const regime = getRegime(nearestKey(idxToDate(idx).str));
+      ctx.fillStyle = regime === 'crisis' ? 'rgba(255,51,51,0.82)'
+                    : regime === 'stress' ? 'rgba(255,165,0,0.65)'
+                    : 'rgba(57,255,20,0.20)';
+      ctx.fillRect(m * cellW + 0.5, y * cellH + 0.5, cellW - 1, cellH - 1);
+    }
+  }
+
+  // Year labels on left edge
+  ctx.font = `bold ${Math.max(6, Math.round(cellH * 0.55))}px Courier New`;
+  ctx.textAlign = 'left';
+  for (let y = 0; y < YEARS; y++) {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillText(2000 + y, 2, y * cellH + cellH * 0.72);
+  }
+
+  // Month labels on top edge (abbreviated: J F M A M J J A S O N D)
+  const mAbbr = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+  ctx.font = `${Math.max(5, Math.round(cellW * 0.55))}px Courier New`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  for (let m = 0; m < 12; m++) {
+    ctx.fillText(mAbbr[m], m * cellW + cellW / 2, Math.max(6, cellH * 0.65));
+  }
+
+  // Current position — bright cell outline
+  const curY = Math.floor(currentMonthIdx / 12);
+  const curM = currentMonthIdx % 12;
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(curM * cellW + 1, curY * cellH + 1, cellW - 2, cellH - 2);
+  // Glow
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(curM * cellW, curY * cellH, cellW, cellH);
+}
+
+function bindMinimap(canvas) {
+  const tooltip = document.getElementById('minimap-tooltip');
+  const YEARS = 26;
+
+  function idxFromXY(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const fx = Math.max(0, Math.min(1, (clientX - rect.left)  / rect.width));
+    const fy = Math.max(0, Math.min(1, (clientY - rect.top)   / rect.height));
+    const m  = Math.floor(fx * 12);
+    const y  = Math.floor(fy * YEARS);
+    return Math.min(TOTAL_MONTHS - 1, y * 12 + m);
+  }
+
+  function navigateTo(clientX, clientY) {
+    const idx = idxFromXY(clientX, clientY);
+    const startIdx = currentMonthIdx;
+    const diff = idx - startIdx;
+    if (Math.abs(diff) < 2) { currentMonthIdx = idx; update(idx); return; }
+    const steps = Math.min(18, Math.max(6, Math.abs(diff) / 8));
+    let step = 0;
+    (function anim() {
+      step++;
+      currentMonthIdx = Math.round(startIdx + diff * (1 - Math.pow(1 - step/steps, 3)));
+      update(currentMonthIdx);
+      if (step < steps) requestAnimationFrame(anim);
+    })();
+    document.getElementById('scroll-hint').style.opacity = '0';
+  }
+
+  function showTooltip(e) {
+    const idx = idxFromXY(e.clientX, e.clientY);
+    const { year, month } = idxToDate(idx);
+    const regime = getRegime(nearestKey(idxToDate(idx).str));
+    const col = regime === 'crisis' ? '#ff5555' : regime === 'stress' ? '#ffa500' : '#39ff14';
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 12) + 'px';
+    tooltip.style.top  = (e.clientY - 28) + 'px';
+    tooltip.innerHTML  = `<span style="color:${col};font-weight:bold">${MONTHS_ABBR_M[month]} ${year}</span>`;
+  }
+
+  // Minimap is view-only — navigation happens inside the full overlay
+  canvas.addEventListener('mousemove', e => { e.stopPropagation(); showTooltip(e); });
+  canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  // Clicks bubble up to #minimap-section onclick="openTimeNav()"
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   FULL-SCREEN TIME NAVIGATOR
+════════════════════════════════════════════════════════════ */
+const MONTH_FULL = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+// Precomputed avg coupling per month (filled on first open)
+let _couplingCache = null;
+
+function precomputeCoupling() {
+  if (_couplingCache) return _couplingCache;
+  _couplingCache = {};
+  for (let i = 0; i < TOTAL_MONTHS; i++) {
+    const key = nearestKey(idxToDate(i).str);
+    const m   = CORR_DATA[key];
+    if (!m) { _couplingCache[i] = 0.15; continue; }
+    let s = 0, n = 0;
+    for (let a = 0; a < 8; a++) for (let b = a+1; b < 8; b++) { s += Math.abs(m[a][b]); n++; }
+    _couplingCache[i] = s / n;
+  }
+  return _couplingCache;
+}
+
+function couplingToColor(v) {
+  // Continuous heatmap: green→orange→red based on actual coupling value
+  const t = Math.max(0, Math.min(1, (v - 0.10) / 0.40)); // normalise 0.10→0.50
+  if (t < 0.38) {
+    const s = t / 0.38;
+    return `rgba(57,255,20,${(0.07 + s * 0.22).toFixed(2)})`;
+  } else if (t < 0.68) {
+    const s = (t - 0.38) / 0.30;
+    return `rgba(255,${Math.round(165 - s*80)},0,${(0.35 + s * 0.30).toFixed(2)})`;
+  } else {
+    const s = (t - 0.68) / 0.32;
+    return `rgba(255,${Math.round(60 - s*45)},${Math.round(30 - s*25)},${(0.55 + s * 0.38).toFixed(2)})`;
+  }
+}
+
+function barColor(v) {
+  if (v > 0.35) return `rgba(255,51,51,0.85)`;
+  if (v > 0.22) return `rgba(255,165,0,0.75)`;
+  return `rgba(57,255,20,0.55)`;
+}
+
+function openTimeNav() {
+  const overlay = document.getElementById('time-nav-overlay');
+  buildTimeNavGrid();
+  overlay.classList.add('open');
+  document.addEventListener('keydown', onTimeNavKey);
+}
+
+function closeTimeNav() {
+  document.getElementById('time-nav-overlay').classList.remove('open');
+  document.removeEventListener('keydown', onTimeNavKey);
+}
+
+function onTimeNavKey(e) {
+  if (e.key === 'Escape') closeTimeNav();
+}
+
+function buildTimeNavGrid() {
+  const cache = precomputeCoupling();
+  const maxC  = Math.max(...Object.values(cache));
+
+  // Month header row
+  const monthRow = document.getElementById('time-nav-month-row');
+  monthRow.innerHTML = '<div class="tn-year-spacer"></div>';
+  MONTH_FULL.forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'tn-month-label';
+    el.textContent = m;
+    monthRow.appendChild(el);
+  });
+
+  // Grid rows — one per year
+  const grid = document.getElementById('time-nav-grid');
+  grid.innerHTML = '';
+
+  for (let y = 0; y < 26; y++) {
+    const row = document.createElement('div');
+    row.className = 'tn-year-row';
+
+    const yearLabel = document.createElement('div');
+    yearLabel.className = 'tn-year-label';
+    yearLabel.textContent = 2000 + y;
+    row.appendChild(yearLabel);
+
+    for (let m = 0; m < 12; m++) {
+      const idx = y * 12 + m;
+      const v   = cache[idx] ?? 0;
+      const cell = document.createElement('div');
+      cell.className = 'tn-cell' + (idx === currentMonthIdx ? ' current' : '');
+      cell.dataset.idx = idx;
+      cell.style.background = couplingToColor(v);
+
+      // Coupling intensity bar at bottom
+      const bar = document.createElement('div');
+      bar.className = 'tn-bar';
+      bar.style.width      = `${Math.min(100,(v/maxC)*100).toFixed(1)}%`;
+      bar.style.background = barColor(v);
+      cell.appendChild(bar);
+
+      // Hover info
+      cell.addEventListener('mouseenter', () => {
+        const { year, month } = idxToDate(idx);
+        const regime = getRegime(nearestKey(idxToDate(idx).str));
+        const col = regime==='crisis' ? '#ff4444' : regime==='stress' ? '#ffa500' : '#39ff14';
+        document.getElementById('tnhb-date').textContent    = `${MONTH_FULL[month]} ${year}`;
+        document.getElementById('tnhb-date').style.color    = col;
+        document.getElementById('tnhb-regime').textContent  = regime==='crisis' ? 'SYSTEMIC SHOCK' : regime==='stress' ? 'ELEVATED STRESS' : 'STABLE';
+        document.getElementById('tnhb-regime').style.color  = col;
+        document.getElementById('tnhb-regime').style.borderColor = col.replace(')',',0.4)').replace('rgb','rgba');
+        document.getElementById('tnhb-coupling').textContent = `AVG COUPLING  ${v.toFixed(3)}`;
+      });
+
+      // Click: navigate + close
+      cell.addEventListener('click', () => {
+        const start = currentMonthIdx, diff = idx - start;
+        const steps = Math.min(22, Math.max(8, Math.abs(diff)/5));
+        let step = 0;
+        (function anim() {
+          step++;
+          currentMonthIdx = Math.round(start + diff*(1-Math.pow(1-step/steps,3)));
+          update(currentMonthIdx);
+          if (step < steps) requestAnimationFrame(anim);
+        })();
+        closeTimeNav();
+        document.getElementById('scroll-hint').style.opacity='0';
+      });
+
+      row.appendChild(cell);
+    }
+    grid.appendChild(row);
+  }
+}
+
+// Refresh current-cell highlight when month changes externally
+function refreshTimeNavCurrent() {
+  document.querySelectorAll('.tn-cell.current').forEach(c=>c.classList.remove('current'));
+  const el = document.querySelector(`.tn-cell[data-idx="${currentMonthIdx}"]`);
+  if (el) {
+    el.classList.add('current');
+    el.scrollIntoView({ block:'nearest', behavior:'smooth' });
+  }
+}
+
+let _hintDismissed = false;
+function dismissClickHint() { if (_hintDismissed) return; _hintDismissed = true; const el = document.getElementById('click-hint'); if (el) el.classList.add('hide'); }
 </script>
+
+<!-- ════ FULL-SCREEN TIME NAVIGATOR OVERLAY ════ -->
+<div id="time-nav-overlay">
+  <div id="time-nav-panel">
+    <div id="time-nav-header">
+      <div id="tnh-left">
+        <span id="tnh-title">// SELECT TIME PERIOD</span>
+        <span id="tnh-hint">HOVER TO PREVIEW · CLICK TO NAVIGATE</span>
+      </div>
+      <div id="tnh-legend">
+        <span class="tnh-leg"><span class="tnh-swatch" style="background:rgba(57,255,20,0.55)"></span>STABLE</span>
+        <span class="tnh-leg"><span class="tnh-swatch" style="background:rgba(255,165,0,0.7)"></span>STRESS</span>
+        <span class="tnh-leg"><span class="tnh-swatch" style="background:rgba(255,51,51,0.85)"></span>CRISIS</span>
+      </div>
+      <button id="time-nav-close" onclick="closeTimeNav()">✕ CLOSE</button>
+    </div>
+    <div id="time-nav-month-row">
+      <div class="tn-year-spacer"></div>
+    </div>
+    <div id="time-nav-body">
+      <div id="time-nav-grid"></div>
+    </div>
+    <div id="time-nav-hover-bar">
+      <span id="tnhb-date">──────────</span>
+      <span id="tnhb-regime">──────────</span>
+      <span id="tnhb-coupling">AVG COUPLING ─.──</span>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
