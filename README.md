@@ -47,8 +47,8 @@ welcome.html  →  index.html  →  globe.html
  
 - **`welcome.html`** : cinematic intro with regime-reactive ambient audio
 - **`index.html`** : force-directed correlation graph, scroll the timeline through 2000 to 2025
-- **`globe.html`** : per-asset geographic dossier (top producers and consumers)
-Timeline position persists in `sessionStorage` across the index ↔ globe round trip.
+- **`globe.html`** : geographic dossier showing top producers and consumers per asset
+- **`dossier.html`** : analytical dossier with price chart, rolling volatility, drawdowns, and per-pair correlations frozen at the user-selected date
  
 ### Quick start
  
@@ -60,16 +60,32 @@ python -m http.server 8000
  
 Then open `http://localhost:8000/welcome.html`.
  
+To regenerate the JSON data files (optional, they are committed):
+```bash
+python compute_correlations.py
+python compute_dossier_data.py
+```
+
 ### Files
- 
-```
 Milestone3/
-├── welcome.html  ·  index.html  ·  globe.html       # 3-layer app
-├── compute_correlations.py                          # 63-day rolling Pearson → JSON
-├── market_data_2000_2025.csv                        # cleaned daily closes
-└── correlation_data.json                            # generated, ~250 monthly matrices
-```
- 
+├── welcome.html  ·  index.html  ·  globe.html  ·  dossier.html   # 4-page app
+├── compute_correlations.py                                       # 63-day rolling Pearson → JSON
+├── compute_dossier_data.py                                       # vol, drawdown, price series → JSON
+├── market_data_2000_2025.csv                                     # cleaned daily closes
+├── correlation_data.json                                         # monthly correlation matrices
+├── dossier_timeseries.json                                       # rolling vol & drawdown per asset
+└── price_series.json                                             # raw and base-100 daily prices
+
+ ### Team contributions
+
+| Member | Responsibility |
+|--------|----------------|
+| Valentin Dupraz | `index.html` (correlation graph) · GitHub repository · integration |
+| Yahya Kerem Molla | `globe.html` (geographic dossier) · `welcome.html` (intro page) |
+| Jason Santangelo | `dossier.html` (asset dossier) · screencast |
+
+Reports and process book written collaboratively.
+
 ### Data sources
  
 - Prices: Yahoo Finance via `yfinance`
