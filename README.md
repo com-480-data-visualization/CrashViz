@@ -68,14 +68,16 @@ python compute_dossier_data.py
 ```
 
 ### Files
-Milestone3/
-├── welcome.html  ·  index.html  ·  globe.html  ·  dossier.html   # 4-page app
-├── compute_correlations.py                                       # 63-day rolling Pearson → JSON
-├── compute_dossier_data.py                                       # vol, drawdown, price series → JSON
-├── market_data_2000_2025.csv                                     # cleaned daily closes
-├── correlation_data.json                                         # monthly correlation matrices
-├── dossier_timeseries.json                                       # rolling vol & drawdown per asset
-└── price_series.json                                             # raw and base-100 daily prices
+
+| File | Purpose |
+|------|---------|
+| `welcome.html`, `index.html`, `globe.html`, `dossier.html` | 4-page app |
+| `compute_correlations.py` | 63-day rolling Pearson → JSON |
+| `compute_dossier_data.py` | vol, drawdown, price series → JSON |
+| `market_data_2000_2025.csv` | cleaned daily closes |
+| `correlation_data.json` | monthly correlation matrices |
+| `dossier_timeseries.json` | rolling vol & drawdown per asset |
+| `price_series.json` | raw and base-100 daily prices |
 
  ### Team contributions
 
