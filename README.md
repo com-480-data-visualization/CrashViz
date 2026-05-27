@@ -40,9 +40,10 @@ To view the live website directly in your browser, click [here](https://com-480-
 CrashViz is a scroll-driven exploration of 25 years of cross-asset correlation regimes (2000 to 2025). Three layers, navigated in sequence:
  
 ```
-welcome.html  →  index.html  →  globe.html
-                    ▲              │
-                    └──[BACK/ESC]──┘
+welcome.html  →  index.html  →  globe.html      (geographic dossier)
+                     ▲       ↘
+                     │         dossier.html     (asset dossier)
+                     └──────[BACK / ESC]────────┘
 ```
  
 - **`welcome.html`** : cinematic intro with regime-reactive ambient audio
